@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Features
+
+* **bench:** add `--max-cost` and `--max-wallclock` caps with partial-run metadata.
+* **bench:** add `--perf` wall-clock baseline checks with token comparison observations and a checked-in quick perf baseline.
+* **config:** lower the default embedding batch size to avoid provider request token limits on large indexes.
+* **filters:** add default-off test/fixture path filtering for review and triage, with plugin and config extension points.
+* **perf:** add patch summary batching, a disk-backed embedding cache, opt-in async LLM graph execution, and bounded parallel agentic tool calls.
+* **perf:** bound retrieval-cache entries, reuse thread-local splitters during parallel indexing, and harden triage evidence tool executor usage.
+
 ## [1.3.0](https://github.com/arm/metis/compare/metis-v1.2.0...metis-v1.3.0) (2026-03-09)
 
 

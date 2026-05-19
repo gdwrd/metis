@@ -11,8 +11,18 @@ def test_tool_definitions_expose_named_tools():
     defs = get_tool_definitions()
     names = {tool.name for tool in defs}
 
-    assert names == {"grep", "find_name", "cat", "sed"}
-    assert all(tool.domains == ("triage_evidence",) for tool in defs)
+    assert names == {
+        "grep",
+        "find_name",
+        "cat",
+        "sed",
+        "get_function_body",
+        "get_callers",
+        "grep_repo",
+    }
+    domains = {tool.name: tool.domains for tool in defs}
+    assert domains["grep"] == ("triage_evidence",)
+    assert domains["get_function_body"] == ("review_context",)
 
 
 def test_build_toolbox_for_policy_exposes_list_and_invocation(tmp_path):
@@ -30,6 +40,13 @@ def test_build_toolbox_for_policy_exposes_list_and_invocation(tmp_path):
         for line in toolbox.grep("beta", "src").splitlines()
     )
     assert toolbox.describe("grep") == {"backend": "shell_grep"}
+
+
+def test_build_toolbox_for_review_context_policy(tmp_path):
+    toolbox = build_toolbox(policy="review_context", codebase_path=str(tmp_path))
+
+    assert toolbox.list_tools() == ("get_callers", "get_function_body", "grep_repo")
+    assert toolbox.has("grep") is False
 
 
 def test_build_toolbox_rejects_unknown_policy(tmp_path):

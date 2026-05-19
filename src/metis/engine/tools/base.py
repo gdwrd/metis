@@ -6,7 +6,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable
 
-
 ToolInvoke = Callable[..., Any]
 
 
@@ -15,6 +14,7 @@ class ToolContext:
     codebase_path: str
     timeout_seconds: int = 8
     max_chars: int = 16000
+    function_index: Any | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,3 +73,12 @@ class ToolBox:
 
     def sed(self, path: str, start_line: int, end_line: int) -> str:
         return self.run("sed", path, start_line, end_line)
+
+    def get_function_body(self, name: str) -> str:
+        return self.run("get_function_body", name)
+
+    def get_callers(self, name: str) -> list[dict[str, Any]]:
+        return self.run("get_callers", name)
+
+    def grep_repo(self, pattern: str, path_glob: str | None = None) -> str:
+        return self.run("grep_repo", pattern, path_glob=path_glob)

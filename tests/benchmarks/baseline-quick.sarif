@@ -1,0 +1,36 @@
+{
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "Metis"
+        }
+      },
+      "results": [
+        {
+          "ruleId": "AI001",
+          "message": {
+            "text": "Stack buffer overflow"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "cases/internal/cwe121/001/vuln.c"
+                },
+                "region": {
+                  "startLine": 5
+                }
+              }
+            }
+          ],
+          "properties": {
+            "cwe": "CWE-121",
+            "severity": "HIGH"
+          }
+        }
+      ]
+    }
+  ]
+}

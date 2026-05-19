@@ -3,7 +3,11 @@
 
 from unidiff import PatchSet
 
-from metis.engine.diff_utils import extract_content_from_diff, process_diff_file
+from metis.engine.diff_utils import (
+    extract_added_line_ranges,
+    extract_content_from_diff,
+    process_diff_file,
+)
 
 
 def _make_patch(patch_text: str):
@@ -22,6 +26,24 @@ def test_extract_content_from_diff_additions_only():
     file_diff = next(iter(ps))
     content = extract_content_from_diff(file_diff)
     assert content == "alpha\nbeta\ngamma\n"
+
+
+def test_extract_added_line_ranges_merges_contiguous_additions():
+    patch = """--- a/foo.txt
++++ b/foo.txt
+@@ -1,4 +1,6 @@
+ unchanged
++alpha
++beta
+ middle
+-old
++new
+ tail
+"""
+    ps = _make_patch(patch)
+    file_diff = next(iter(ps))
+
+    assert extract_added_line_ranges(file_diff) == [(2, 3), (5, 5)]
 
 
 def test_process_diff_includes_original_when_available(tmp_path):

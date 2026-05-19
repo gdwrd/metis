@@ -4,10 +4,10 @@
 from metis.version import __version__ as TOOL_VERSION
 from metis.sarif.utils import read_file_lines, create_fingerprint
 
-
 DEFAULT_CONTEXT_LINES = 3
 SARIF_VERSION = "2.1.0"
 SARIF_SCHEMA = "https://json.schemastore.org/sarif-2.1.0.json"
+DEFAULT_LEVEL = "warning"
 
 RULES = [
     {
@@ -53,7 +53,7 @@ def _normalise_line_number(raw_line):
 
 def _severity_to_level(severity: str | None) -> str:
     if not severity or not isinstance(severity, str):
-        return RULES[0]["defaultConfiguration"]["level"]
+        return DEFAULT_LEVEL
 
     lowered = severity.strip().lower()
     if lowered in {"critical", "high"}:
@@ -63,7 +63,7 @@ def _severity_to_level(severity: str | None) -> str:
     if lowered == "low":
         return "note"
 
-    return RULES[0]["defaultConfiguration"]["level"]
+    return DEFAULT_LEVEL
 
 
 def generate_sarif(
@@ -181,6 +181,10 @@ def generate_sarif(
             if confidence is not None:
                 properties["confidence"] = confidence
 
+            tool_trace = issue.get("tool_trace")
+            if isinstance(tool_trace, list) and tool_trace:
+                properties["metisToolTrace"] = _clip_tool_trace_property(tool_trace)
+
             if reported_line_num != line_num:
                 properties["reportedLineNumber"] = reported_line_num
 
@@ -218,3 +222,19 @@ def generate_sarif(
             run["results"].append(result_entry)
 
     return sarif
+
+
+def _clip_tool_trace_property(trace):
+    clipped = []
+    for item in trace[:20]:
+        if not isinstance(item, dict):
+            continue
+        clipped_item = {}
+        for key, value in item.items():
+            safe_key = str(key)[:80]
+            safe_value = str(value)
+            if len(safe_value) > 200:
+                safe_value = safe_value[:200].rstrip() + "...[truncated]"
+            clipped_item[safe_key] = safe_value
+        clipped.append(clipped_item)
+    return clipped

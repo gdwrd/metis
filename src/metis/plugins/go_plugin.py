@@ -9,3 +9,12 @@ class GoPlugin(ConfigBackedLanguagePlugin):
 
     NAME = "go"
     DEFAULT_EXTENSIONS = [".go"]
+    DEFAULT_TEST_PATH_PATTERNS = ["*_test.go"]
+
+    def get_function_node_types(self) -> dict[str, list[str]]:
+        return {
+            "function": ["function_declaration", "method_declaration"],
+            "call": ["call_expression"],
+            "name": ["name", "function"],
+            "import": ["import_declaration"],
+        }

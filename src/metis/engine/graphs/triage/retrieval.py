@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import hashlib
+from typing import cast
 
 from metis.engine.analysis.c_family_helpers import extract_code_like_symbols
 
@@ -111,8 +112,22 @@ def _build_retrieval_query(state: TriageState) -> str:
 
 def triage_node_retrieve(state: TriageState) -> TriageState:
     if not state.get("use_retrieval_context", True):
-        new_state: TriageState = dict(state)
+        new_state = cast(TriageState, state.copy())
         new_state["context"] = ""
+        return new_state
+    if state.get("shared_retrieval_query"):
+        shared_context = state.get("shared_retrieval_context", "")
+        context = str(shared_context or "")
+        _emit_debug(
+            state,
+            "retrieval",
+            query=str(state.get("shared_retrieval_query", "") or ""),
+            code_context="",
+            docs_context="",
+            context=context,
+        )
+        new_state = cast(TriageState, state.copy())
+        new_state["context"] = context
         return new_state
     query = _build_retrieval_query(state)
     code = _retrieve_context_deterministic(state.get("retriever_code"), query)
@@ -126,6 +141,6 @@ def triage_node_retrieve(state: TriageState) -> TriageState:
         docs_context=docs,
         context=context,
     )
-    new_state: TriageState = dict(state)
+    new_state = cast(TriageState, state.copy())
     new_state["context"] = context
     return new_state

@@ -1,0 +1,18 @@
+{
+  "mode": "review",
+  "quick": true,
+  "case_count": 1,
+  "case_ids": [
+    "internal-cwe121-001"
+  ],
+  "by_cwe": {
+    "CWE-121": {
+      "tp": 1,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    }
+  }
+}

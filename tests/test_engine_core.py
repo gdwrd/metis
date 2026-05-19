@@ -4,8 +4,11 @@
 import pytest
 import tempfile
 import threading
+import time
 from unittest.mock import Mock
 from metis.engine import MetisEngine
+from metis.engine.embed_cache import CachedEmbedModel
+from metis.engine.retrieval_cache import RetrievalCache
 from metis.exceptions import PluginNotFoundError, QueryEngineInitError
 from metis.usage import UsageRuntime
 
@@ -227,6 +230,39 @@ def test_engine_reuses_injected_runtime_and_backend_embed_models(tmp_path):
     llm_provider.get_embed_model_docs.assert_not_called()
 
 
+def test_engine_wraps_embed_models_when_disk_cache_enabled(tmp_path):
+    backend = Mock()
+    backend.init = Mock()
+    backend.get_query_engines = Mock(return_value=("code-qe", "docs-qe"))
+    code_model = Mock()
+    docs_model = Mock()
+    llm_provider = Mock()
+    llm_provider.get_embed_model_code.return_value = code_model
+    llm_provider.get_embed_model_docs.return_value = docs_model
+
+    engine = MetisEngine(
+        codebase_path=str(tmp_path),
+        vector_backend=backend,
+        llm_provider=llm_provider,
+        max_workers=2,
+        max_token_length=2048,
+        llama_query_model="gpt-test",
+        similarity_top_k=3,
+        response_mode="compact",
+        embed_cache_enabled=True,
+        embed_cache_path=str(tmp_path / "embed.sqlite"),
+        embed_cache_max_mb=1,
+        embed_dim=3,
+    )
+
+    assert isinstance(engine.get_embed_model_code(), CachedEmbedModel)
+    assert isinstance(engine.get_embed_model_docs(), CachedEmbedModel)
+    assert engine.get_embed_model_code().inner is code_model
+    assert engine.get_embed_model_docs().inner is docs_model
+    assert backend.embed_model_code is engine.get_embed_model_code()
+    assert backend.embed_model_docs is engine.get_embed_model_docs()
+
+
 def test_engine_exposes_focused_services_without_compat_aliases():
     backend = Mock()
     backend.init = Mock()
@@ -290,3 +326,192 @@ def test_close_clears_query_cache_and_closes_backend():
 
     assert engine._init_and_get_query_engines() == ("code-qe", "docs-qe")
     assert backend.get_query_engines.call_count == 2
+
+
+def test_query_engine_retrievers_cache_repeated_queries_per_engine():
+    class _Doc:
+        def __init__(self, text):
+            self.page_content = text
+
+    class _CountingRetriever:
+        def __init__(self, prefix):
+            self.prefix = prefix
+            self.calls = 0
+
+        def get_relevant_documents(self, query):
+            self.calls += 1
+            return [_Doc(f"{self.prefix}:{query}:{self.calls}")]
+
+    code = _CountingRetriever("code")
+    docs = _CountingRetriever("docs")
+    backend = Mock()
+    backend.init = Mock()
+    backend.get_query_engines = Mock(return_value=(code, docs))
+    llm_provider = Mock()
+    llm_provider.get_embed_model_code.return_value = Mock()
+    llm_provider.get_embed_model_docs.return_value = Mock()
+
+    engine = MetisEngine(
+        vector_backend=backend,
+        llm_provider=llm_provider,
+        max_workers=2,
+        max_token_length=2048,
+        llama_query_model="gpt-test",
+        similarity_top_k=3,
+        response_mode="compact",
+    )
+
+    qe_code, qe_docs = engine._init_and_get_query_engines()
+
+    assert qe_code.get_relevant_documents("same")[0].page_content == "code:same:1"
+    assert qe_code.get_relevant_documents("same")[0].page_content == "code:same:1"
+    assert qe_docs.get_relevant_documents("same")[0].page_content == "docs:same:1"
+    assert code.calls == 1
+    assert docs.calls == 1
+
+    engine.clear_retrieval_cache()
+
+    assert qe_code.get_relevant_documents("same")[0].page_content == "code:same:2"
+    assert code.calls == 2
+
+
+def test_retrieval_cache_single_flights_concurrent_identical_queries():
+    class _Doc:
+        def __init__(self, text):
+            self.page_content = text
+
+    class _SlowRetriever:
+        def __init__(self):
+            self.calls = 0
+            self.lock = threading.Lock()
+
+        def get_relevant_documents(self, query):
+            with self.lock:
+                self.calls += 1
+            time.sleep(0.05)
+            return [_Doc(query)]
+
+    retriever = _SlowRetriever()
+    backend = Mock()
+    backend.init = Mock()
+    backend.get_query_engines = Mock(return_value=(retriever, Mock()))
+    llm_provider = Mock()
+    llm_provider.get_embed_model_code.return_value = Mock()
+    llm_provider.get_embed_model_docs.return_value = Mock()
+    engine = MetisEngine(
+        vector_backend=backend,
+        llm_provider=llm_provider,
+        max_workers=4,
+        max_token_length=2048,
+        llama_query_model="gpt-test",
+        similarity_top_k=3,
+        response_mode="compact",
+    )
+    qe_code, _qe_docs = engine._init_and_get_query_engines()
+    barrier = threading.Barrier(8)
+    results = []
+
+    def _worker():
+        barrier.wait()
+        results.append(qe_code.get_relevant_documents("same")[0].page_content)
+
+    threads = [threading.Thread(target=_worker) for _ in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert results == ["same"] * 8
+    assert retriever.calls == 1
+
+
+def test_retrieval_cache_clear_does_not_store_inflight_result():
+    cache = RetrievalCache()
+    key = ("code", 3, "query")
+    started = threading.Event()
+    release = threading.Event()
+    lock = threading.Lock()
+    calls = 0
+    results = []
+
+    def _factory():
+        nonlocal calls
+        with lock:
+            calls += 1
+            value = calls
+        started.set()
+        release.wait(timeout=2)
+        return [f"doc-{value}"]
+
+    thread = threading.Thread(
+        target=lambda: results.append(cache.get_or_set(key, _factory)[0])
+    )
+    thread.start()
+    assert started.wait(timeout=2)
+
+    cache.clear()
+    release.set()
+    thread.join(timeout=2)
+
+    assert results == ["doc-1"]
+    assert len(cache) == 0
+    assert cache.get_or_set(key, _factory)[0] == "doc-2"
+    assert calls == 2
+
+
+def test_retrieval_cache_evicts_least_recently_used_entry():
+    cache = RetrievalCache(max_entries=2)
+    calls: dict[tuple[str, int, str], int] = {}
+
+    def _factory(key):
+        calls[key] = calls.get(key, 0) + 1
+        return [f"{key[2]}:{calls[key]}"]
+
+    key_a = ("code", 3, "a")
+    key_b = ("code", 3, "b")
+    key_c = ("code", 3, "c")
+
+    assert cache.get_or_set(key_a, lambda: _factory(key_a)) == ["a:1"]
+    assert cache.get_or_set(key_b, lambda: _factory(key_b)) == ["b:1"]
+    assert cache.get_or_set(key_a, lambda: _factory(key_a)) == ["a:1"]
+    assert cache.get_or_set(key_c, lambda: _factory(key_c)) == ["c:1"]
+
+    assert len(cache) == 2
+    assert cache.get_or_set(key_b, lambda: _factory(key_b)) == ["b:2"]
+
+
+def test_metis_engine_passes_configured_retrieval_cache_bound():
+    class _Doc:
+        def __init__(self, text):
+            self.page_content = text
+
+    class _Retriever:
+        def __init__(self):
+            self.calls: list[str] = []
+
+        def get_relevant_documents(self, query):
+            self.calls.append(query)
+            return [_Doc(f"{query}:{len(self.calls)}")]
+
+    retriever = _Retriever()
+    backend = Mock()
+    backend.init = Mock()
+    backend.get_query_engines = Mock(return_value=(retriever, Mock()))
+    llm_provider = Mock()
+    llm_provider.get_embed_model_code.return_value = Mock()
+    llm_provider.get_embed_model_docs.return_value = Mock()
+    engine = MetisEngine(
+        vector_backend=backend,
+        llm_provider=llm_provider,
+        max_workers=2,
+        max_token_length=2048,
+        llama_query_model="gpt-test",
+        similarity_top_k=3,
+        response_mode="compact",
+        retrieval_cache_max_entries=1,
+    )
+    qe_code, _qe_docs = engine._init_and_get_query_engines()
+
+    assert qe_code.get_relevant_documents("a")[0].page_content == "a:1"
+    assert qe_code.get_relevant_documents("b")[0].page_content == "b:2"
+    assert qe_code.get_relevant_documents("a")[0].page_content == "a:3"

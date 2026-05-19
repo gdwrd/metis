@@ -197,7 +197,20 @@ Metis provides an interactive CLI with several built-in commands. After launchin
 - `--triage` – after `review_code`, `review_file`, or `review_patch`, triage findings and annotate SARIF output.
 - `--include-triaged` – include findings already triaged by Metis when running triage.
 - `--ignore-index` – allow `review_code`, `review_file`, `review_patch`, and `triage` to run without index-backed context. Metis warns and skips retrieval in this mode. It does not apply to `ask` or `update`.
+- `--review-max-workers N` / `--triage-max-workers N` – override the worker counts used by full-code review and SARIF triage without changing the global `max_workers` setting.
+- `--no-embed-cache` – disable the local SQLite embedding cache for this run.
+- `--async-llm` – opt into async LLM graph execution for review and triage while preserving the existing synchronous command surface.
+- `--review-agentic-wallclock SECONDS` – set the agentic review tool wall-clock budget. The packaged default is `60`.
 - `--verbose`, `--quiet`, `--output-file`, `--output-files` – control logging and export formats.
+
+Common performance tunables live under `metis_engine` in `metis.yaml`:
+
+- `review_max_workers` and `triage_max_workers` split review and triage concurrency from the global `max_workers`.
+- `embed_batch_size` controls provider embedding batch size. The packaged default is `16`.
+- `embed_cache_enabled` and `embed_cache_max_mb` control the local embedding cache. The cache is keyed by model and text hash, stored beside the active vector backend, and enabled by default.
+- `retrieval_cache_max_entries` bounds the per-engine retrieval cache used by review, ask, and triage query engines.
+- `async_llm_enabled` enables the async graph path from config. Keep it disabled unless the selected provider supports concurrent async calls reliably.
+- `review.agentic.wallclock_seconds` bounds total agentic tool time per reviewed chunk. Agentic defaults remain `max_iterations=3` and `max_tool_calls=6` until benchmark evidence supports lowering them.
 
 ### `index`
 Indexes your codebase into a vector database. Must be run before any analysis.

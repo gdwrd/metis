@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 from metis.configuration import load_plugin_config
 from metis.exceptions import PluginNotFoundError, QueryEngineInitError
@@ -11,10 +12,12 @@ from metis.plugin_loader import discover_supported_language_names, load_plugins
 from metis.usage import UsageRuntime
 from metis.vector_store.base import BaseVectorStore
 
+from .embed_cache import CachedEmbedModel, DiskEmbedCache, build_embed_cache_model_key
 from .graphs import AskGraph, ReviewGraph
 from .indexing_service import IndexingService
 from .options import TriageOptions, coerce_triage_options
 from .repository import EngineRepository
+from .retrieval_cache import CachedRetriever, RetrievalCache
 from .review_service import ReviewService
 from .runtime import EngineConfig, EngineState
 from .triage_constants import DEFAULT_TRIAGE_SIMILARITY_TOP_K
@@ -55,6 +58,21 @@ class MetisEngine:
 
         for k in required_keys:
             setattr(self, k, kwargs[k])
+        self.max_workers = max(1, int(self.max_workers))
+        self.review_max_workers = max(
+            1, int(kwargs.get("review_max_workers", self.max_workers))
+        )
+        self.triage_max_workers = max(
+            1, int(kwargs.get("triage_max_workers", self.max_workers))
+        )
+        self.retrieval_cache_max_entries = max(
+            1, int(kwargs.get("retrieval_cache_max_entries", 1024))
+        )
+        self.embed_cache_enabled = bool(kwargs.get("embed_cache_enabled", False))
+        self.embed_cache_max_mb = max(1, int(kwargs.get("embed_cache_max_mb", 500)))
+        self.embed_cache_path = kwargs.get("embed_cache_path")
+        self.embed_dim = kwargs.get("embed_dim")
+        self.async_llm_enabled = bool(kwargs.get("async_llm_enabled", False))
 
         self.llm_provider = llm_provider
         injected_usage_runtime = kwargs.get("usage_runtime")
@@ -72,6 +90,28 @@ class MetisEngine:
         self.metisignore_file = kwargs.get("metisignore_file") or ".metisignore"
         self.review_code_include_paths = kwargs.get("review_code_include_paths", [])
         self.review_code_exclude_paths = kwargs.get("review_code_exclude_paths", [])
+        self.skip_test_files = bool(kwargs.get("skip_test_files", False))
+        self.extra_test_path_patterns = [
+            str(pattern)
+            for pattern in kwargs.get("extra_test_path_patterns", []) or []
+            if str(pattern or "").strip()
+        ]
+        self.review_mode = str(kwargs.get("review_mode", "standard") or "standard")
+        self.review_agentic_max_iterations = int(
+            kwargs.get("review_agentic_max_iterations", 2)
+        )
+        self.review_agentic_max_tool_calls = int(
+            kwargs.get("review_agentic_max_tool_calls", 4)
+        )
+        self.review_agentic_tool_timeout_seconds = int(
+            kwargs.get("review_agentic_tool_timeout_seconds", 5)
+        )
+        self.review_agentic_max_extra_tokens = int(
+            kwargs.get("review_agentic_max_extra_tokens", 8000)
+        )
+        self.review_agentic_wallclock_seconds = float(
+            kwargs.get("review_agentic_wallclock_seconds", 60.0)
+        )
 
         self.plugin_config = load_plugin_config()
         self.custom_guidance_precedence = self.plugin_config.get(
@@ -103,7 +143,14 @@ class MetisEngine:
             custom_guidance_precedence=self.custom_guidance_precedence,
             embed_model_code=self.get_embed_model_code(),
             embed_model_docs=self.get_embed_model_docs(),
+            embed_cache_enabled=self.embed_cache_enabled,
+            embed_cache_path=self.embed_cache_path,
+            embed_cache_max_mb=self.embed_cache_max_mb,
+            async_llm_enabled=self.async_llm_enabled,
             max_workers=self.max_workers,
+            review_max_workers=self.review_max_workers,
+            triage_max_workers=self.triage_max_workers,
+            retrieval_cache_max_entries=self.retrieval_cache_max_entries,
             max_token_length=self.max_token_length,
             llama_query_model=self.llama_query_model,
             similarity_top_k=self.similarity_top_k,
@@ -111,8 +158,18 @@ class MetisEngine:
             doc_chunk_size=self.doc_chunk_size,
             doc_chunk_overlap=self.doc_chunk_overlap,
             metisignore_file=self.metisignore_file,
+            review_mode=self.review_mode,
+            review_agentic_max_iterations=self.review_agentic_max_iterations,
+            review_agentic_max_tool_calls=self.review_agentic_max_tool_calls,
+            review_agentic_tool_timeout_seconds=(
+                self.review_agentic_tool_timeout_seconds
+            ),
+            review_agentic_max_extra_tokens=self.review_agentic_max_extra_tokens,
+            review_agentic_wallclock_seconds=self.review_agentic_wallclock_seconds,
             review_code_include_paths=list(self.review_code_include_paths),
             review_code_exclude_paths=list(self.review_code_exclude_paths),
+            skip_test_files=self.skip_test_files,
+            extra_test_path_patterns=list(self.extra_test_path_patterns),
             code_exts=self.code_exts,
             ext_plugin_map=self.ext_plugin_map,
             ext_pattern_plugin_map=self.ext_pattern_plugin_map,
@@ -152,7 +209,41 @@ class MetisEngine:
             existing_model=getattr(self.vector_backend, "embed_model_docs", None),
             reuse_existing=injected_usage_runtime is not None,
         )
+        if self.embed_cache_enabled:
+            self._embed_model_code = self._wrap_embed_model_cache(
+                "code",
+                self._embed_model_code,
+            )
+            self._embed_model_docs = self._wrap_embed_model_cache(
+                "docs",
+                self._embed_model_docs,
+            )
         self._attach_embed_models_to_backend()
+
+    def _wrap_embed_model_cache(self, kind: str, model):
+        cache_path = self._resolve_embed_cache_path()
+        model_key = build_embed_cache_model_key(kind, model, self.embed_dim)
+        cache = DiskEmbedCache(
+            cache_path,
+            model_key=model_key,
+            max_mb=self.embed_cache_max_mb,
+        )
+        return CachedEmbedModel(model, cache)
+
+    def _resolve_embed_cache_path(self) -> Path:
+        if self.embed_cache_path:
+            return Path(str(self.embed_cache_path))
+        persist_dir = getattr(self.vector_backend, "persist_dir", None)
+        if persist_dir:
+            return Path(str(persist_dir)) / "embed_cache.sqlite"
+        project_schema = getattr(self.vector_backend, "project_schema", None)
+        if project_schema:
+            return (
+                Path(self.codebase_path)
+                / ".metis"
+                / f"{str(project_schema)}_embed_cache.sqlite"
+            )
+        return Path(self.codebase_path) / ".metis" / "embed_cache.sqlite"
 
     def _build_embed_model(self, kind: str):
         method_name = (
@@ -208,7 +299,7 @@ class MetisEngine:
             llm_provider=self.llm_provider,
             llama_query_model=self.llama_query_model,
             plugin_config=self.plugin_config,
-            max_workers=self.max_workers,
+            max_workers=self.triage_max_workers,
             triage_similarity_top_k=self.triage_similarity_top_k,
             triage_checkpoint_every=self.triage_checkpoint_every,
             triage_tool_timeout_seconds=self.triage_tool_timeout_seconds,
@@ -216,6 +307,9 @@ class MetisEngine:
             create_query_engines=self._create_query_engines,
             get_plugin_for_extension=self._get_plugin_for_extension,
             usage_hooks=self.usage_runtime.hooks,
+            async_llm_enabled=self.async_llm_enabled,
+            skip_test_files=self.skip_test_files,
+            extra_test_path_patterns=list(self.extra_test_path_patterns),
         )
 
     def _get_review_graph(self):
@@ -300,7 +394,38 @@ class MetisEngine:
         )
         if not qe_code or not qe_docs:
             raise QueryEngineInitError()
-        return qe_code, qe_docs
+        cache = self._get_retrieval_cache()
+        return (
+            CachedRetriever(
+                qe_code,
+                cache=cache,
+                retriever_id="code",
+                top_k=top_k,
+            ),
+            CachedRetriever(
+                qe_docs,
+                cache=cache,
+                retriever_id="docs",
+                top_k=top_k,
+            ),
+        )
+
+    def _get_retrieval_cache(self) -> RetrievalCache:
+        if self._state.retrieval_cache is None:
+            self._state.retrieval_cache = RetrievalCache(
+                max_entries=self._config.retrieval_cache_max_entries
+            )
+        return self._state.retrieval_cache
+
+    def clear_retrieval_cache(self) -> None:
+        cache = self._state.retrieval_cache
+        if cache is not None:
+            cache.clear()
+
+    def reset_query_engines(self) -> None:
+        self.clear_retrieval_cache()
+        self._state.qe_code = None
+        self._state.qe_docs = None
 
     def _init_and_get_query_engines(self):
         if self._state.qe_code is not None and self._state.qe_docs is not None:
@@ -328,6 +453,10 @@ class MetisEngine:
             options,
             include_triaged=include_triaged,
             use_retrieval_context=use_retrieval_context,
+            skip_test_files=self.skip_test_files if options is None else None,
+            extra_test_path_patterns=(
+                tuple(self.extra_test_path_patterns) if options is None else None
+            ),
         )
         return self._triage_service.triage_sarif_payload(
             payload,
@@ -343,6 +472,7 @@ class MetisEngine:
         output_path: str | None = None,
         progress_callback=None,
         debug_callback=None,
+        checkpoint_callback=None,
         checkpoint_every: int | None = None,
         options: TriageOptions | None = None,
         include_triaged: bool | None = None,
@@ -352,19 +482,23 @@ class MetisEngine:
             options,
             include_triaged=include_triaged,
             use_retrieval_context=use_retrieval_context,
+            skip_test_files=self.skip_test_files if options is None else None,
+            extra_test_path_patterns=(
+                tuple(self.extra_test_path_patterns) if options is None else None
+            ),
         )
         return self._triage_service.triage_sarif_file(
             input_path=input_path,
             output_path=output_path,
             progress_callback=progress_callback,
             debug_callback=debug_callback,
+            checkpoint_callback=checkpoint_callback,
             checkpoint_every=checkpoint_every,
             options=options,
         )
 
     def close(self):
-        self._state.qe_code = None
-        self._state.qe_docs = None
+        self.reset_query_engines()
         self._triage_service.close()
         close_fn = getattr(self.vector_backend, "close", None)
         if callable(close_fn):

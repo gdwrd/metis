@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from types import SimpleNamespace
+import threading
+import time
 
 import pytest
 
@@ -359,3 +361,160 @@ def test_triage_request_propagates_metis_source_hints(engine, monkeypatch):
     assert captured["is_metis"] is True
     assert captured["source_tool"] == "Metis"
     assert "reasoning: Dangerous flow" in str(captured["explanation"])
+
+
+def test_triage_groups_findings_by_file_and_shares_retrieval(engine, monkeypatch):
+    payload = {
+        "version": "2.1.0",
+        "runs": [
+            {
+                "results": [
+                    {
+                        "message": {"text": "A"},
+                        "ruleId": "R1",
+                        "locations": [
+                            {
+                                "physicalLocation": {
+                                    "artifactLocation": {"uri": "src/a.c"},
+                                    "region": {"startLine": 10},
+                                }
+                            }
+                        ],
+                    },
+                    {
+                        "message": {"text": "B"},
+                        "ruleId": "R2",
+                        "locations": [
+                            {
+                                "physicalLocation": {
+                                    "artifactLocation": {"uri": "src/a.c"},
+                                    "region": {"startLine": 20},
+                                }
+                            }
+                        ],
+                    },
+                ]
+            }
+        ],
+    }
+
+    class _Doc:
+        def __init__(self, text):
+            self.page_content = text
+
+    class _Retriever:
+        def __init__(self):
+            self.calls = []
+
+        def get_relevant_documents(self, query):
+            self.calls.append(query)
+            return [_Doc("shared")]
+
+    code = _Retriever()
+    docs = _Retriever()
+    captured = []
+
+    class _DummyGraph:
+        def triage(self, request):
+            captured.append(request)
+            return {"status": "valid", "reason": "ok"}
+
+    monkeypatch.setattr(
+        engine._triage_service,
+        "_init_and_get_triage_query_engines",
+        lambda: (code, docs),
+    )
+    monkeypatch.setattr(
+        engine._triage_service, "_get_thread_triage_graph", lambda: _DummyGraph()
+    )
+    engine._triage_service.max_workers = 1
+
+    engine.triage_sarif_payload(payload)
+
+    assert len(captured) == 2
+    assert all(request["shared_retrieval_query"] for request in captured)
+    assert (
+        captured[0]["shared_retrieval_query"] == captured[1]["shared_retrieval_query"]
+    )
+    assert code.calls == [captured[0]["shared_retrieval_query"]]
+    assert docs.calls == [captured[0]["shared_retrieval_query"]]
+
+
+def test_triage_same_file_findings_reuse_retrieval_but_run_decisions_in_parallel(
+    engine, monkeypatch
+):
+    payload = {
+        "version": "2.1.0",
+        "runs": [
+            {
+                "results": [
+                    {
+                        "message": {"text": "A"},
+                        "ruleId": "R1",
+                        "locations": [
+                            {
+                                "physicalLocation": {
+                                    "artifactLocation": {"uri": "src/a.c"},
+                                    "region": {"startLine": 10},
+                                }
+                            }
+                        ],
+                    },
+                    {
+                        "message": {"text": "B"},
+                        "ruleId": "R2",
+                        "locations": [
+                            {
+                                "physicalLocation": {
+                                    "artifactLocation": {"uri": "src/a.c"},
+                                    "region": {"startLine": 20},
+                                }
+                            }
+                        ],
+                    },
+                ]
+            }
+        ],
+    }
+
+    class _Doc:
+        def __init__(self, text):
+            self.page_content = text
+
+    class _Retriever:
+        def __init__(self):
+            self.calls = []
+
+        def get_relevant_documents(self, query):
+            self.calls.append(query)
+            return [_Doc("shared")]
+
+    code = _Retriever()
+    docs = _Retriever()
+    starts = []
+    lock = threading.Lock()
+
+    class _DummyGraph:
+        def triage(self, request):
+            assert request["triage_tool_executor"] is not None
+            with lock:
+                starts.append(time.monotonic())
+            time.sleep(0.05)
+            return {"status": "valid", "reason": "ok"}
+
+    monkeypatch.setattr(
+        engine._triage_service,
+        "_init_and_get_triage_query_engines",
+        lambda: (code, docs),
+    )
+    monkeypatch.setattr(
+        engine._triage_service, "_get_thread_triage_graph", lambda: _DummyGraph()
+    )
+    engine._triage_service.max_workers = 2
+
+    engine.triage_sarif_payload(payload)
+
+    assert len(starts) == 2
+    assert abs(starts[1] - starts[0]) < 0.04
+    assert len(code.calls) == 1
+    assert len(docs.calls) == 1

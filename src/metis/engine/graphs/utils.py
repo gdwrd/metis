@@ -71,16 +71,18 @@ def retrieve_text(retriever, query):
         return ""
 
 
-def synthesize_context(code_text, doc_text):
+def synthesize_context(code_text, doc_text, related_text=""):
     """
     Compose the retrieval context used in prompts.
     Only includes retrieved code/docs text, not the retrieval question itself.
     """
     parts = []
+    if related_text:
+        parts.append(related_text)
     if code_text:
-        parts.append(code_text)
+        parts.append("VECTOR_SIMILAR_CODE:\n" + code_text)
     if doc_text:
-        parts.append(doc_text)
+        parts.append("DOCS:\n" + doc_text)
     return "\n\n".join(p for p in parts if p)
 
 

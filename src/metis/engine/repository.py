@@ -9,6 +9,7 @@ import os
 import pathspec
 from llama_index.core.node_parser import SentenceSplitter
 
+from .code_index import FunctionIndex, load_function_index
 from .runtime import EngineConfig, EngineState
 
 logger = logging.getLogger("metis")
@@ -60,6 +61,15 @@ class EngineRepository:
                 chunk_overlap=self._config.doc_chunk_overlap,
             )
         return self._state.doc_splitter
+
+    def get_function_index_path(self) -> str:
+        persist_dir = getattr(self._config.vector_backend, "persist_dir", None)
+        if isinstance(persist_dir, str) and persist_dir:
+            return os.path.join(str(persist_dir), "function_index.json")
+        return os.path.join(self._config.codebase_path, ".metis", "function_index.json")
+
+    def load_function_index(self) -> FunctionIndex | None:
+        return load_function_index(self.get_function_index_path())
 
     def rel_to_base(self, path):
         base_path = os.path.abspath(self._config.codebase_path)

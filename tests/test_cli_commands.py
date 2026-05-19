@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 from metis.cli import commands
 from metis.cli.command_runtime import CommandRuntime
+from metis.bench import BenchmarkOptions, BenchmarkRegressionError
 from metis.engine.options import ReviewOptions, TriageOptions
 
 
@@ -48,6 +49,155 @@ def test_run_review_code_uses_review_domain_surface(monkeypatch):
     commands.run_review_code(engine, args, runtime)
 
     assert calls == [("get_code_files", True), ("review_code", True)]
+
+
+def test_run_bench_parses_args_and_saves_output(monkeypatch, tmp_path):
+    captured = []
+
+    def fake_run_benchmark(_engine, options):
+        captured.append(options)
+        return {
+            "mode": "review",
+            "case_count": 1,
+            "totals": {"tp": 1, "fp": 0, "fn": 0, "recall": 1.0, "precision": 1.0},
+        }
+
+    monkeypatch.setattr(commands, "run_benchmark", fake_run_benchmark)
+    monkeypatch.setattr(commands, "print_console", lambda *_args, **_kwargs: None)
+    output = tmp_path / "bench.json"
+    args = SimpleNamespace(quiet=True, output_file=[str(output)])
+
+    commands.run_bench(
+        SimpleNamespace(),
+        ["--quick", "--triage", "--manifest", "custom.yaml"],
+        args,
+        CommandRuntime(
+            command="bench",
+            command_args=[],
+            use_retrieval_context=False,
+        ),
+    )
+
+    assert captured == [
+        BenchmarkOptions(
+            manifest_path="custom.yaml",
+            quick=True,
+            triage=True,
+            baseline_path=None,
+            recall_tolerance=0.05,
+            update_baseline=False,
+        )
+    ]
+    assert output.exists()
+
+
+def test_run_bench_parses_cap_args(monkeypatch, tmp_path):
+    captured = []
+
+    def fake_run_benchmark(_engine, options):
+        captured.append(options)
+        return {
+            "mode": "review",
+            "case_count": 1,
+            "totals": {"tp": 1, "fp": 0, "fn": 0, "recall": 1.0, "precision": 1.0},
+        }
+
+    monkeypatch.setattr(commands, "run_benchmark", fake_run_benchmark)
+    monkeypatch.setattr(commands, "print_console", lambda *_args, **_kwargs: None)
+    output = tmp_path / "bench.json"
+    args = SimpleNamespace(quiet=True, output_file=[str(output)])
+
+    commands.run_bench(
+        SimpleNamespace(),
+        ["--quick", "--max-cost", "1.5", "--max-wallclock", "60"],
+        args,
+        CommandRuntime(
+            command="bench",
+            command_args=[],
+            use_retrieval_context=False,
+        ),
+    )
+
+    assert captured[0].max_cost_usd == 1.5
+    assert captured[0].max_wallclock_seconds == 60.0
+
+
+def test_run_bench_parses_perf_args(monkeypatch, tmp_path):
+    captured = []
+
+    def fake_run_benchmark(_engine, options):
+        captured.append(options)
+        return {
+            "mode": "review",
+            "case_count": 1,
+            "totals": {"tp": 1, "fp": 0, "fn": 0, "recall": 1.0, "precision": 1.0},
+            "perf": True,
+            "perf_regression_failed": False,
+        }
+
+    monkeypatch.setattr(commands, "run_benchmark", fake_run_benchmark)
+    monkeypatch.setattr(commands, "print_console", lambda *_args, **_kwargs: None)
+    output = tmp_path / "bench.json"
+    baseline = tmp_path / "perf-baseline.json"
+    args = SimpleNamespace(quiet=True, output_file=[str(output)])
+
+    commands.run_bench(
+        SimpleNamespace(),
+        [
+            "--quick",
+            "--perf",
+            "--perf-baseline",
+            str(baseline),
+            "--perf-wallclock-tolerance",
+            "0.3",
+        ],
+        args,
+        CommandRuntime(
+            command="bench",
+            command_args=[],
+            use_retrieval_context=False,
+        ),
+    )
+
+    assert captured[0].perf is True
+    assert captured[0].perf_baseline_path == str(baseline)
+    assert captured[0].perf_wallclock_tolerance == 0.3
+
+
+def test_run_bench_saves_regression_result_then_raises(monkeypatch, tmp_path):
+    result = {
+        "mode": "review",
+        "case_count": 1,
+        "totals": {"tp": 0, "fp": 0, "fn": 1, "recall": 0.0, "precision": 0.0},
+        "regression_failed": True,
+        "regressions": [{"cwe": "CWE-121"}],
+    }
+
+    def fake_run_benchmark(_engine, _options):
+        raise BenchmarkRegressionError(result["regressions"], result)
+
+    monkeypatch.setattr(commands, "run_benchmark", fake_run_benchmark)
+    monkeypatch.setattr(commands, "print_console", lambda *_args, **_kwargs: None)
+    output = tmp_path / "bench.json"
+    args = SimpleNamespace(quiet=True, output_file=[str(output)])
+
+    try:
+        commands.run_bench(
+            SimpleNamespace(),
+            ["--quick"],
+            args,
+            CommandRuntime(
+                command="bench",
+                command_args=[],
+                use_retrieval_context=False,
+            ),
+        )
+    except BenchmarkRegressionError:
+        pass
+    else:
+        raise AssertionError("expected BenchmarkRegressionError")
+
+    assert output.exists()
 
 
 def test_run_update_uses_indexing_domain_surface(monkeypatch, tmp_path):
@@ -243,3 +393,30 @@ def test_run_review_code_triggers_triage_when_global_flag_enabled(monkeypatch):
     commands.run_review_code(engine, args, runtime)
 
     assert calls == [False]
+
+
+def test_review_and_triage_options_include_test_filter_flags():
+    args = SimpleNamespace(
+        review_mode="standard",
+        review_agentic_max_iterations=2,
+        review_agentic_max_tool_calls=4,
+        review_agentic_tool_timeout_seconds=5,
+        review_agentic_max_extra_tokens=8000,
+        review_agentic_wallclock_seconds=60.0,
+        include_triaged=False,
+        skip_test_files=True,
+        extra_test_path_patterns=("fixtures/**",),
+    )
+    runtime = CommandRuntime(
+        command="review_code",
+        command_args=[],
+        use_retrieval_context=False,
+    )
+
+    review_options = commands._review_options_for_runtime(args, runtime)
+    triage_options = commands._triage_options_for_runtime(args, runtime)
+
+    assert review_options.skip_test_files is True
+    assert triage_options.skip_test_files is True
+    assert review_options.extra_test_path_patterns == ("fixtures/**",)
+    assert triage_options.extra_test_path_patterns == ("fixtures/**",)

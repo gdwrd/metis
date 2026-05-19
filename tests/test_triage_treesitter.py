@@ -3,6 +3,9 @@
 
 from metis.engine.analysis.base import AnalyzerEvidence
 from metis.engine.graphs.triage import triage_node_collect_evidence
+from tests.engine.triage.test_wrapper_resolution import (
+    _NearSecondHopUseSiteBeforeDefinitionToolbox,
+)
 
 
 class _Analyzer:
@@ -365,3 +368,25 @@ def test_triage_collect_evidence_skips_duplicate_fallback_probe_for_local_file()
         event.get("tool_args", {}).get("mode") != "fallback"
         for event in symbol_grep_events
     )
+
+
+def test_triage_collect_evidence_hints_skip_wrapper_target_use_site():
+    runner = _NearSecondHopUseSiteBeforeDefinitionToolbox()
+    state = {
+        "finding_message": "Possible issue around safe_alloc",
+        "finding_file_path": "src/util/alloc.c",
+        "finding_line": 12,
+        "finding_rule_id": "R1",
+        "finding_snippet": "safe_alloc(n);",
+        "triage_analyzer": _WeakAnalyzer(),
+        "triage_codebase_path": ".",
+        "triage_evidence_budget": "deep",
+    }
+
+    out = triage_node_collect_evidence(state, toolbox=runner)
+
+    evidence_pack = out.get("evidence_pack", "")
+    assert "[SYMBOL_RESOLUTION_HINTS]" in evidence_pack
+    assert "safe_alloc @ src/util/alloc.c:12" in evidence_pack
+    assert "inner_alloc @ src/util/alloc.c:18" not in evidence_pack
+    assert "inner_alloc @ src/util/alloc.c:20" in evidence_pack

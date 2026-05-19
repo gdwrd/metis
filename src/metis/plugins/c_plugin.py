@@ -7,6 +7,15 @@ from metis.plugins.base import ConfigBackedLanguagePlugin
 class CPlugin(ConfigBackedLanguagePlugin):
     NAME = "c"
     DEFAULT_EXTENSIONS = [".c", ".h", ".cc"]
+    DEFAULT_TEST_PATH_PATTERNS = ["**/testcases/**"]
+
+    def get_function_node_types(self) -> dict[str, list[str]]:
+        return {
+            "function": ["function_definition"],
+            "call": ["call_expression"],
+            "name": ["declarator", "function"],
+            "import": ["preproc_include"],
+        }
 
     def get_triage_analyzer_factory(self):
         from metis.engine.analysis.c_family_analyzer import (

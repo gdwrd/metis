@@ -112,6 +112,13 @@ def test_generate_sarif_uses_issue_metadata_when_source_missing():
                         "mitigation": "Add null checks",
                         "confidence": 0.9,
                         "cwe": "CWE-476",
+                        "tool_trace": [
+                            {
+                                "name": "grep_repo",
+                                "status": "ok",
+                                "detail": "x" * 250,
+                            }
+                        ],
                     }
                 ],
             }
@@ -141,6 +148,8 @@ def test_generate_sarif_uses_issue_metadata_when_source_missing():
     assert props["why"].startswith("Explains")
     assert props["mitigation"].startswith("Add")
     assert props["confidence"] == 0.9
+    assert props["metisToolTrace"][0]["name"] == "grep_repo"
+    assert props["metisToolTrace"][0]["detail"].endswith("...[truncated]")
 
 
 def test_generate_sarif_clamps_line_numbers_when_file_shorter(tmp_path):

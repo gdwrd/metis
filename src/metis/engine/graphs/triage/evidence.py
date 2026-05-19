@@ -16,6 +16,7 @@ from metis.engine.analysis.c_family_helpers import (
 )
 
 from . import constants as C
+from .budget import STANDARD, coerce_evidence_budget
 from ..types import TriageState
 from .retrieval import _extract_symbol_candidates
 from .evidence_text import (
@@ -148,6 +149,7 @@ def _section_labels(sections: list[str]) -> list[str]:
 
 
 def triage_node_collect_evidence(state: TriageState, *, toolbox) -> TriageState:
+    budget = coerce_evidence_budget(state.get("triage_evidence_budget"))
     file_path = state.get("finding_file_path", "") or ""
     line = int(state.get("finding_line", 1) or 1)
     is_metis_source = bool(state.get("finding_is_metis", False))
@@ -156,12 +158,18 @@ def triage_node_collect_evidence(state: TriageState, *, toolbox) -> TriageState:
     window_radius = (
         C.FILE_WINDOW_RADIUS_METIS if is_metis_source else C.FILE_WINDOW_RADIUS_EXTERNAL
     )
-    max_symbol_terms = (
-        C.MAX_SYMBOL_TERMS_METIS if is_metis_source else C.MAX_SYMBOL_TERMS_EXTERNAL
-    )
+    if budget == STANDARD:
+        max_symbol_terms = (
+            C.MAX_SYMBOL_TERMS_METIS
+            if is_metis_source
+            else C.MAX_SYMBOL_TERMS_EXTERNAL
+        )
+    else:
+        max_symbol_terms = budget.max_symbol_terms
 
     sections: list[str] = []
-    max_sections = C.MAX_SECTIONS
+    max_sections = C.MAX_SECTIONS if budget == STANDARD else budget.max_sections
+    state["triage_evidence_budget"] = budget.name
 
     analyzer_symbols: list[str] = []
     ext = os.path.splitext(file_path or "")[1].lower()
@@ -248,8 +256,9 @@ def triage_node_collect_evidence(state: TriageState, *, toolbox) -> TriageState:
         toolbox=toolbox,
         symbols=symbols,
         file_path=file_path,
-        max_followup_hits=C.DEFAULT_MAX_FOLLOWUP_HITS,
+        max_followup_hits=budget.max_followup_hits,
         max_sections=max_sections,
+        max_symbol_hops=budget.max_symbol_hops,
         scope_mode=scope_mode,
     )
 
@@ -264,7 +273,7 @@ def triage_node_collect_evidence(state: TriageState, *, toolbox) -> TriageState:
         sections,
         toolbox=toolbox,
         followup_hits=followup_hits,
-        max_followup_hits=C.DEFAULT_MAX_FOLLOWUP_HITS,
+        max_followup_hits=budget.max_followup_hits,
         max_sections=max_sections,
     )
 
@@ -306,10 +315,12 @@ def triage_node_collect_evidence(state: TriageState, *, toolbox) -> TriageState:
     _emit_debug(
         state,
         "evidence_gate",
+        budget=budget.name,
         obligations=obligations,
         obligation_coverage=obligation_coverage,
         missing=evidence_gate_missing,
         section_labels=_section_labels(sections),
     )
 
-    return _finalize_evidence_pack_state(state, sections)
+    max_chars = C.EVIDENCE_PACK_MAX_CHARS if budget == STANDARD else budget.max_chars
+    return _finalize_evidence_pack_state(state, sections, max_chars=max_chars)

@@ -7,3 +7,4 @@ from metis.plugins.base import ConfigBackedLanguagePlugin
 class RubyPlugin(ConfigBackedLanguagePlugin):
     NAME = "ruby"
     DEFAULT_EXTENSIONS = [".rb"]
+    DEFAULT_TEST_PATH_PATTERNS = ["*_spec.rb"]

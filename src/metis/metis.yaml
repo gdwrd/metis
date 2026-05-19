@@ -9,7 +9,14 @@ psql_database:
 
 metis_engine:
   max_token_length: 250000
-  max_workers: 5
+  max_workers: 8
+  review_max_workers: 8
+  triage_max_workers: 8
+  embed_batch_size: 16
+  embed_cache_enabled: true
+  embed_cache_max_mb: 500
+  async_llm_enabled: false
+  retrieval_cache_max_entries: 1024
   triage_checkpoint_every: 50
   triage_tool_timeout_seconds: 12
   embed_dim: 3072
@@ -19,9 +26,22 @@ metis_engine:
     hnsw_ef_search: 40
     hnsw_dist_method: "vector_cosine_ops"
 
+filters:
+  skip_test_files: false
+  extra_test_path_patterns: []
+
+review:
+  mode: standard
+  agentic:
+    max_iterations: 2
+    max_tool_calls: 4
+    tool_timeout_seconds: 5
+    max_extra_tokens: 8000
+    wallclock_seconds: 60
+
 llm_provider:
   name: "openai"
-  model: "gpt-5.4"
+  model: "gpt-5.5"
   # Optional for reasoning-capable OpenAI models: none, minimal, low, medium,
   # high, or xhigh depending on model support. Can be overridden under query.
   # reasoning_effort: "medium"

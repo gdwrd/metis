@@ -3,6 +3,9 @@
 
 from __future__ import annotations
 
+import os
+from pathlib import Path
+import ssl
 from typing import Any, Dict
 
 from langchain_openai import ChatOpenAI
@@ -15,11 +18,21 @@ from llama_index.llms.openai import OpenAI as LlamaOpenAI
 from metis.providers.base import LLMProvider
 
 _ALLOWED_OPENAI_EMBED_MODELS = {member.value for member in OpenAIEmbeddingModelType}
+DEFAULT_EMBED_BATCH_SIZE = 16
+
+
+def _ensure_ssl_cert_file() -> None:
+    if os.environ.get("SSL_CERT_FILE"):
+        return
+    cafile = ssl.get_default_verify_paths().cafile
+    if cafile and Path(cafile).is_file():
+        os.environ["SSL_CERT_FILE"] = cafile
 
 
 class OpenAICompatibleProvider(LLMProvider):
 
     def __init__(self, config: Dict[str, Any]):
+        _ensure_ssl_cert_file()
         self.config = config
         self.api_key = config.get("llm_api_key")
         self.base_url = (
@@ -82,6 +95,7 @@ class OpenAICompatibleProvider(LLMProvider):
             params["default_headers"] = self.default_headers
         if callback_manager is not None:
             params["callback_manager"] = callback_manager
+        params["embed_batch_size"] = DEFAULT_EMBED_BATCH_SIZE
         if extra_kwargs:
             params.update(extra_kwargs)
 

@@ -1,0 +1,14 @@
+{
+  "mode": "review",
+  "quick": true,
+  "case_count": 1,
+  "case_ids": [
+    "internal-cwe121-001"
+  ],
+  "commands": {
+    "review_code": {
+      "wallclock_seconds": 60.0,
+      "total_tokens": 0
+    }
+  }
+}

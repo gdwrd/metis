@@ -1,0 +1,13 @@
+line_tolerance: 1
+cases:
+  - id: internal-cwe121-001
+    source: internal
+    cwe: CWE-121
+    language: c
+    path: cases/internal/cwe121/001
+    quick: true
+    expected_findings:
+      - file: vuln.c
+        line_range: [6, 8]
+        cwe: CWE-121
+        severity_min: medium

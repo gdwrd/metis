@@ -1,0 +1,83 @@
+name: Bench
+
+on:
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 2 * * *"
+
+permissions: read-all
+
+jobs:
+  quick-bench-contract:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+
+      - name: Install test dependencies
+        run: |
+          uv venv --python 3.12
+          uv pip install '.[test]'
+
+      - name: Run benchmark contract tests
+        run: |
+          uv run pytest \
+            tests/test_bench_manifest.py \
+            tests/test_bench_scoring.py \
+            tests/test_bench_runner.py \
+            tests/test_cli_commands.py \
+            tests/test_cli_entry.py
+
+      - name: Check quick baseline recall gate
+        run: |
+          uv run python - <<'PY'
+          import json
+          from pathlib import Path
+          from metis.bench.manifest import load_manifest
+          from metis.bench.scoring import compare_to_baseline, score_sarif
+
+          manifest = load_manifest("tests/benchmarks/manifest.yaml")
+          quick_cases = manifest.selected_cases(quick=True)
+          payload = json.loads(Path("tests/benchmarks/baseline-quick.sarif").read_text())
+          current = {
+              "mode": "review",
+              "quick": True,
+              "case_count": len(quick_cases),
+              "case_ids": [case.id for case in quick_cases],
+              **score_sarif(
+                  payload,
+                  manifest,
+                  cases=quick_cases,
+                  triage_enabled=False,
+              ),
+          }
+          baseline = json.loads(Path("tests/benchmarks/baseline-quick.json").read_text())
+          regressions = compare_to_baseline(current, baseline, recall_tolerance=0.05)
+          if regressions:
+              raise SystemExit(f"Benchmark recall regression: {regressions}")
+          PY
+
+      - name: Run nightly quick benchmark
+        if: github.event_name == 'schedule'
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          if [ -z "${OPENAI_API_KEY:-}" ]; then
+            echo "Skipping live nightly benchmark because OPENAI_API_KEY is not configured."
+            exit 0
+          fi
+          uv run metis bench \
+            --quick \
+            --max-cost 1.50 \
+            --max-wallclock 1800 \
+            --output-file results/bench-nightly.json

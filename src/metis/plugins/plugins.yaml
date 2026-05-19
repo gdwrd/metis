@@ -453,6 +453,17 @@ plugins:
       validation_review: "Validate the following TableGen review for security concerns."
   python:
     supported_extensions: [".py"]
+    analyzer:
+      function_node_types: ["function_definition", "async_function_definition"]
+      method_node_types: ["function_definition"]
+      class_node_types: ["class_definition"]
+      call_node_types: ["call"]
+      name_fields: ["name"]
+      call_name_fields: ["function"]
+      parameter_node_types: ["parameters", "identifier"]
+      import_node_types: ["import_statement", "import_from_statement"]
+      return_node_types: ["return_statement"]
+      check_node_types: ["if_statement", "while_statement", "for_statement", "assert_statement"]
     splitting:
       chunk_lines: 40
       chunk_lines_overlap: 15
@@ -539,6 +550,17 @@ plugins:
         [[RELEVANT_CONTEXT_UNINDENTED]]
   go:
     supported_extensions: [".go"]
+    analyzer:
+      function_node_types: ["function_declaration"]
+      method_node_types: ["method_declaration"]
+      class_node_types: []
+      call_node_types: ["call_expression"]
+      name_fields: ["name"]
+      call_name_fields: ["function"]
+      parameter_node_types: ["parameter_list", "parameter_declaration", "identifier"]
+      import_node_types: ["import_declaration"]
+      return_node_types: ["return_statement"]
+      check_node_types: ["if_statement", "for_statement", "switch_statement", "type_switch_statement", "select_statement"]
     splitting:
       chunk_lines: 40
       chunk_lines_overlap: 15
@@ -588,6 +610,17 @@ plugins:
         [[RELEVANT_CONTEXT_UNINDENTED]]
   typescript:
     supported_extensions: [".ts", ".tsx"]
+    analyzer:
+      function_node_types: ["function_declaration", "arrow_function", "generator_function_declaration"]
+      method_node_types: ["method_definition"]
+      class_node_types: ["class_declaration"]
+      call_node_types: ["call_expression"]
+      name_fields: ["name", "function", "property", "declarator"]
+      call_name_fields: ["function", "callee", "name", "property"]
+      parameter_node_types: ["formal_parameters", "required_parameter", "identifier"]
+      import_node_types: ["import_statement"]
+      return_node_types: ["return_statement"]
+      check_node_types: ["if_statement", "while_statement", "for_statement", "switch_statement", "ternary_expression"]
     splitting:
       chunk_lines: 40
       chunk_lines_overlap: 15
@@ -637,6 +670,17 @@ plugins:
         [[RELEVANT_CONTEXT_UNINDENTED]]
   solidity:
     supported_extensions: [".sol"]
+    analyzer:
+      function_node_types: ["function_definition"]
+      method_node_types: ["modifier_definition"]
+      class_node_types: ["contract_declaration"]
+      call_node_types: ["call_expression"]
+      name_fields: ["name", "function"]
+      call_name_fields: ["function", "name", "member"]
+      parameter_node_types: ["parameter_list", "parameter"]
+      import_node_types: ["import_directive"]
+      return_node_types: ["return_statement"]
+      check_node_types: ["if_statement", "while_statement", "for_statement", "modifier_invocation"]
     splitting:
       chunk_lines: 40
       chunk_lines_overlap: 15
@@ -696,6 +740,17 @@ plugins:
         [[RELEVANT_CONTEXT_UNINDENTED]]
   rust:
     supported_extensions: [".rs"]
+    analyzer:
+      function_node_types: ["function_item"]
+      method_node_types: ["closure_expression"]
+      class_node_types: ["impl_item", "struct_item", "enum_item"]
+      call_node_types: ["call_expression"]
+      name_fields: ["name", "function"]
+      call_name_fields: ["function", "name"]
+      parameter_node_types: ["parameters", "parameter", "identifier"]
+      import_node_types: ["use_declaration"]
+      return_node_types: ["return_expression"]
+      check_node_types: ["if_expression", "while_expression", "for_expression", "match_expression"]
     splitting:
       chunk_lines: 40
       chunk_lines_overlap: 15
@@ -875,6 +930,17 @@ plugins:
         Do not include any commentary—only output the patch diff.
   javascript:
     supported_extensions: [".js", ".jsx"]
+    analyzer:
+      function_node_types: ["function_declaration", "arrow_function", "generator_function_declaration"]
+      method_node_types: ["method_definition"]
+      class_node_types: ["class_declaration"]
+      call_node_types: ["call_expression"]
+      name_fields: ["name", "function", "property", "declarator"]
+      call_name_fields: ["function", "callee", "name", "property"]
+      parameter_node_types: ["formal_parameters", "identifier"]
+      import_node_types: ["import_statement"]
+      return_node_types: ["return_statement"]
+      check_node_types: ["if_statement", "while_statement", "for_statement", "switch_statement", "ternary_expression"]
     splitting:
       chunk_lines: 40
       chunk_lines_overlap: 15

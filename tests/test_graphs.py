@@ -1,14 +1,20 @@
 # SPDX-FileCopyrightText: Copyright 2025 Arm Limited and/or its affiliates <open-source-office@arm.com>
 # SPDX-License-Identifier: Apache-2.0
 
+import asyncio
+
 from metis.engine.graphs.ask import AskGraph
+from metis.engine.code_index import extract_function_nodes_from_document
 from metis.engine.graphs.review import (
+    _line_ranges_for_chunk,
     review_node_retrieve,
     review_node_build_prompt,
     review_node_llm,
+    review_node_llm_async,
     review_node_parse,
 )
 from metis.engine.graphs.triage.llm import _build_user_prompt, triage_node_llm
+from metis.plugins.python_plugin import PythonPlugin
 
 
 class _Doc:
@@ -123,6 +129,86 @@ def test_review_node_retrieve_no_index_skips_retrievers():
     assert out["context"] == ""
 
 
+def test_review_node_retrieve_prepends_related_functions(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    source = (
+        "def validate(value):\n"
+        "    return value > 0\n"
+        "\n"
+        "def handle(value):\n"
+        "    return validate(value)\n"
+    )
+    (repo / "app.py").write_text(source, encoding="utf-8")
+    _nodes, function_index = extract_function_nodes_from_document(
+        type("Doc", (), {"text": source, "id_": "app.py"})(),
+        PythonPlugin({}),
+    )
+    state = {
+        "file_path": str(repo / "app.py"),
+        "relative_file": "app.py",
+        "snippet": "def handle(value):\n    return validate(value)\n",
+        "retriever_code": DummyRetriever("code"),
+        "retriever_docs": DummyRetriever("docs"),
+        "function_index": function_index,
+        "function_index_codebase_path": str(repo),
+        "context_prompt": "Use file: app.py",
+    }
+
+    out = review_node_retrieve(state)
+
+    assert out["context"].startswith("RELATED_FUNCTIONS:")
+    assert "app.py::validate" in out["context"]
+    assert out["context"].find("RELATED_FUNCTIONS:") < out["context"].find(
+        "VECTOR_SIMILAR_CODE:"
+    )
+
+
+def test_review_node_retrieve_uses_line_range_for_body_only_chunk(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    source = (
+        "def validate(value):\n"
+        "    return value > 0\n"
+        "\n"
+        "def handle(value):\n"
+        "    return validate(value)\n"
+    )
+    (repo / "app.py").write_text(source, encoding="utf-8")
+    _nodes, function_index = extract_function_nodes_from_document(
+        type("Doc", (), {"text": source, "id_": "app.py"})(),
+        PythonPlugin({}),
+    )
+    state = {
+        "file_path": str(repo / "app.py"),
+        "relative_file": "app.py",
+        "snippet": "    return validate(value)\n",
+        "snippet_line_ranges": [(5, 5)],
+        "retriever_code": DummyRetriever("code"),
+        "retriever_docs": DummyRetriever("docs"),
+        "function_index": function_index,
+        "function_index_codebase_path": str(repo),
+        "context_prompt": "Use file: app.py",
+    }
+
+    out = review_node_retrieve(state)
+
+    assert out["context"].startswith("RELATED_FUNCTIONS:")
+    assert "app.py::validate" in out["context"]
+    assert "app.py::handle" not in out["context"]
+
+
+def test_line_ranges_for_chunk_advances_full_file_offsets():
+    ranges, next_line = _line_ranges_for_chunk(
+        "line 4\nline 5\n",
+        explicit_line_ranges=None,
+        next_line=4,
+    )
+
+    assert ranges == [(4, 5)]
+    assert next_line == 6
+
+
 def test_review_node_llm_omits_context_section_in_no_index_mode():
     captured = {}
 
@@ -147,6 +233,35 @@ def test_review_node_llm_omits_context_section_in_no_index_mode():
     )
 
     assert "CONTEXT:" not in captured["body_text"]
+
+
+def test_review_node_llm_async_uses_ainvoke():
+    captured = {}
+
+    class _AsyncNode:
+        async def ainvoke(self, payload):
+            captured.update(payload)
+            return {"reviews": [{"issue": "Issue"}]}
+
+    state = {
+        "file_path": "foo.py",
+        "snippet": "print('hello')",
+        "context": "",
+        "mode": "file",
+        "system_prompt": "prompt",
+        "use_retrieval_context": False,
+    }
+
+    out = asyncio.run(
+        review_node_llm_async(
+            state,
+            structured_node=_AsyncNode(),
+            fallback_node=None,
+        )
+    )
+
+    assert captured["system_prompt"] == "prompt"
+    assert out["parsed_reviews"][0]["issue"] == "Issue"
 
 
 def test_triage_user_prompt_omits_rag_context_in_no_index_mode():

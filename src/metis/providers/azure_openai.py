@@ -12,15 +12,26 @@ from metis.providers.registry import register_provider
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_EMBED_BATCH_SIZE = 16
+
 
 class AzureOpenAIEmbeddingAdapter(BaseEmbedding):
     """Use LangChain's Azure embeddings client behind LlamaIndex's interface."""
 
     _client: AzureOpenAIEmbeddings
+    _embed_batch_size: int
 
-    def __init__(self, client: AzureOpenAIEmbeddings, callback_manager=None):
+    def __init__(
+        self,
+        client: AzureOpenAIEmbeddings,
+        callback_manager=None,
+        embed_batch_size: int = DEFAULT_EMBED_BATCH_SIZE,
+    ):
         super().__init__(model_name=client.model, callback_manager=callback_manager)
         self._client = client
+        self._embed_batch_size = max(
+            1, int(embed_batch_size or DEFAULT_EMBED_BATCH_SIZE)
+        )
 
     def _get_query_embedding(self, query: str):
         return self._client.embed_query(query)
@@ -35,10 +46,26 @@ class AzureOpenAIEmbeddingAdapter(BaseEmbedding):
         return await self._client.aembed_query(text)
 
     def _get_text_embeddings(self, texts):
-        return self._client.embed_documents(texts)
+        embeddings = []
+        text_list = list(texts)
+        for start in range(0, len(text_list), self._embed_batch_size):
+            embeddings.extend(
+                self._client.embed_documents(
+                    text_list[start : start + self._embed_batch_size]
+                )
+            )
+        return embeddings
 
     async def _aget_text_embeddings(self, texts):
-        return await self._client.aembed_documents(texts)
+        embeddings = []
+        text_list = list(texts)
+        for start in range(0, len(text_list), self._embed_batch_size):
+            embeddings.extend(
+                await self._client.aembed_documents(
+                    text_list[start : start + self._embed_batch_size]
+                )
+            )
+        return embeddings
 
 
 class AzureOpenAIProvider(LLMProvider):
@@ -67,6 +94,9 @@ class AzureOpenAIProvider(LLMProvider):
         self.docs_embedding_deployment = config.get(
             "docs_embedding_deployment", self.docs_embedding_model
         )
+        self.embed_batch_size = int(
+            config.get("embed_batch_size", DEFAULT_EMBED_BATCH_SIZE)
+        )
 
         self.temperature = float(config.get("llama_query_temperature", 0.0))
         self.max_tokens = int(config.get("llama_query_max_tokens", 512))
@@ -84,6 +114,7 @@ class AzureOpenAIProvider(LLMProvider):
                 deployment=self.code_embedding_deployment,
             ),
             callback_manager=callback_manager,
+            embed_batch_size=self.embed_batch_size,
         )
 
     def get_embed_model_docs(self, *, callback_manager=None):
@@ -93,6 +124,7 @@ class AzureOpenAIProvider(LLMProvider):
                 deployment=self.docs_embedding_deployment,
             ),
             callback_manager=callback_manager,
+            embed_batch_size=self.embed_batch_size,
         )
 
     def get_query_engine_class(self):

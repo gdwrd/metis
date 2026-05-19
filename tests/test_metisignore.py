@@ -61,6 +61,9 @@ def test_index_prepare_nodes_respects_nested_metisignore_allowlist(
     (tmp_path / ".metisignore").write_text(
         "*\n!src/\n!src/keep.py\n!README.md\n", encoding="utf-8"
     )
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "keep.py").write_text("print('keep')\n", encoding="utf-8")
+    (tmp_path / "README.md").write_text("# keep\n", encoding="utf-8")
 
     engine = _build_engine(tmp_path, dummy_backend, dummy_llm)
 
@@ -92,7 +95,7 @@ def test_index_prepare_nodes_respects_nested_metisignore_allowlist(
 
     captured = {}
 
-    def _fake_prepare_nodes_iter(code_docs, doc_docs, *_args):
+    def _fake_prepare_nodes_iter(code_docs, doc_docs, *_args, **_kwargs):
         captured["code_ids"] = [doc.id_ for doc in code_docs]
         captured["doc_ids"] = [doc.id_ for doc in doc_docs]
         if False:
@@ -111,6 +114,38 @@ def test_index_prepare_nodes_respects_nested_metisignore_allowlist(
         "doc_ids": [f"{tmp_path.name}/README.md"],
     }
     assert engine._state.pending_nodes == (["code-node"], ["doc-node"])
+
+
+def test_index_prepare_nodes_prefilters_metisignored_files_before_reader(
+    tmp_path, dummy_backend, dummy_llm, monkeypatch
+):
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "keep.py").write_text("print('keep')\n", encoding="utf-8")
+    (tmp_path / "src" / "drop.py").write_text("print('drop')\n", encoding="utf-8")
+    (tmp_path / "README.md").write_text("# keep\n", encoding="utf-8")
+    (tmp_path / "notes.md").write_text("# drop\n", encoding="utf-8")
+    (tmp_path / ".metisignore").write_text(
+        "*\n!src/\n!src/keep.py\n!README.md\n", encoding="utf-8"
+    )
+
+    engine = _build_engine(tmp_path, dummy_backend, dummy_llm)
+    captured = {}
+
+    class _DummyReader:
+        def __init__(self, **kwargs):
+            captured["input_files"] = sorted(
+                Path(path).relative_to(tmp_path).as_posix()
+                for path in kwargs["input_files"]
+            )
+
+        def load_data(self):
+            return []
+
+    monkeypatch.setattr(indexing_service_mod, "SimpleDirectoryReader", _DummyReader)
+
+    engine.indexing.index_prepare_nodes()
+
+    assert captured["input_files"] == ["README.md", "src/keep.py"]
 
 
 def test_review_patch_respects_metisignore_allowlist(

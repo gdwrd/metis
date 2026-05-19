@@ -3,8 +3,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from concurrent.futures import TimeoutError as FutureTimeout
 import os
 import re
+import threading
+import time
 from typing import Any
 
 from metis.engine.analysis.c_family_macro import (
@@ -25,6 +29,20 @@ from .evidence_text import (
     _token_pattern,
 )
 
+_TERMINAL_WRAPPER_TARGETS = {
+    "alloca",
+    "calloc",
+    "free",
+    "malloc",
+    "memcpy",
+    "memmove",
+    "realloc",
+    "strcat",
+    "strcpy",
+    "strncat",
+    "strncpy",
+}
+
 
 def _safe_tool_capture(
     state: TriageState,
@@ -40,8 +58,20 @@ def _safe_tool_capture(
     emit_debug: bool = True,
     invoke,
 ) -> str | None:
+    if _triage_evidence_deadline_exceeded(state):
+        if append_error_section and error_label:
+            sections.append(f"[{error_label}]\ntriage evidence deadline exceeded")
+        if emit_debug:
+            _emit_debug(
+                state,
+                "tool_call",
+                tool_name=tool_name,
+                tool_args=tool_args,
+                tool_output="Tool execution skipped: triage evidence deadline exceeded",
+            )
+        return None
     try:
-        output = invoke()
+        output = _invoke_with_deadline(state, invoke)
     except Exception as exc:
         if append_error_section and error_label:
             sections.append(f"[{error_label}]\n{exc}")
@@ -53,6 +83,9 @@ def _safe_tool_capture(
                 tool_args=tool_args,
                 tool_output=f"Tool execution failed: {exc}",
             )
+        return None
+
+    if output is None:
         return None
 
     clipped = _limit_output(output, max_lines=max_lines, max_chars=max_chars)
@@ -67,6 +100,54 @@ def _safe_tool_capture(
             tool_output=clipped,
         )
     return output
+
+
+def _invoke_with_deadline(
+    state: TriageState, invoke: Callable[[], str | None]
+) -> str | None:
+    deadline = float(state.get("triage_evidence_deadline_at", 0.0) or 0.0)
+    if deadline <= 0:
+        return invoke()
+
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise TimeoutError("triage evidence deadline exceeded")
+
+    executor = state.get("triage_tool_executor")
+    submit = getattr(executor, "submit", None)
+    if not callable(submit):
+        return invoke()
+
+    if _running_in_executor_thread(executor):
+        return invoke()
+
+    future = submit(invoke)
+    try:
+        return future.result(timeout=remaining)
+    except FutureTimeout as exc:
+        future.cancel()
+        raise TimeoutError("triage evidence deadline exceeded") from exc
+
+
+def _running_in_executor_thread(executor: Any) -> bool:
+    # ThreadPoolExecutor has no public worker-membership API; keep this guard isolated.
+    current_thread = threading.current_thread()
+    try:
+        if current_thread in getattr(executor, "_threads", set()):
+            return True
+    except TypeError:
+        pass
+    thread_name_prefix = str(getattr(executor, "_thread_name_prefix", "") or "")
+    return bool(
+        thread_name_prefix and current_thread.name.startswith(thread_name_prefix)
+    )
+
+
+def _triage_evidence_deadline_exceeded(state: TriageState) -> bool:
+    deadline = float(state.get("triage_evidence_deadline_at", 0.0) or 0.0)
+    if deadline <= 0:
+        return False
+    return time.monotonic() > deadline
 
 
 def _tool_debug_args(toolbox, tool_name: str, **tool_args) -> dict:
@@ -440,11 +521,13 @@ def _gather_symbol_definition_hits(
     file_path: str,
     max_followup_hits: int,
     max_sections: int,
+    max_symbol_hops: int = 1,
     scope_mode: str = "line_local",
 ) -> tuple[list[tuple[str, int]], set[str], list[str]]:
     followup_hits: list[tuple[str, int]] = []
     definition_hints: set[str] = set()
     resolved: set[str] = set()
+    wrapper_chains_recorded: set[str] = set()
 
     if not symbols:
         return followup_hits, definition_hints, []
@@ -458,7 +541,137 @@ def _gather_symbol_definition_hits(
     )
     fallback_paths = [path for path in fallback_paths if path != local_path]
 
-    def _probe_symbol(symbol: str, path: str, mode: str) -> bool:
+    def _read_hit_context(path: str, line: int) -> tuple[str, int]:
+        start = max(1, line - C.HIT_CONTEXT_RADIUS)
+        end = line + C.HIT_CONTEXT_RADIUS
+        output = _safe_tool_capture(
+            state,
+            sections,
+            tool_name="sed",
+            tool_args=_tool_debug_args(
+                toolbox,
+                "sed",
+                path=path,
+                start_line=start,
+                end_line=end,
+            ),
+            max_lines=C.HIT_CONTEXT_MAX_LINES,
+            max_chars=C.HIT_CONTEXT_MAX_CHARS,
+            append_error_section=False,
+            emit_debug=True,
+            invoke=lambda p=path, s=start, e=end: toolbox.sed(p, s, e),
+        )
+        return output or "", start
+
+    def _resolve_symbol_once(symbol: str) -> tuple[tuple[str, int], str] | None:
+        start_index = len(followup_hits)
+        if _probe_symbol(
+            symbol,
+            local_path,
+            "wrapper-local",
+            follow_wrappers=False,
+        ):
+            hit = _first_wrapper_definition_hit(symbol, followup_hits[start_index:])
+            if hit is not None:
+                return hit
+        for path in fallback_paths:
+            start_index = len(followup_hits)
+            if _probe_symbol(
+                symbol,
+                path,
+                "wrapper-fallback",
+                follow_wrappers=False,
+            ):
+                hit = _first_wrapper_definition_hit(symbol, followup_hits[start_index:])
+                if hit is not None:
+                    return hit
+        return None
+
+    def _first_wrapper_definition_hit(
+        symbol: str, hits: list[tuple[str, int]]
+    ) -> tuple[tuple[str, int], str] | None:
+        for hit_path, hit_line in hits:
+            if not hit_path:
+                continue
+            context, context_start = _read_hit_context(hit_path, hit_line)
+            definition = _extract_thin_wrapper_definition(
+                symbol, context, context_start
+            )
+            if definition is not None:
+                definition_line, _target = definition
+                return (hit_path, definition_line), context
+        return None
+
+    def _record_wrapper_chain(symbol: str, parsed: list[tuple[str, int]]) -> None:
+        if max_symbol_hops <= 1 or not parsed or len(sections) >= max_sections:
+            return
+        if symbol in wrapper_chains_recorded:
+            return
+        seed: tuple[str, int] | None = None
+        seed_context = ""
+        for candidate_path, candidate_line in parsed:
+            context, context_start = _read_hit_context(candidate_path, candidate_line)
+            definition = _extract_thin_wrapper_definition(
+                symbol, context, context_start
+            )
+            if definition is not None:
+                definition_line, _target = definition
+                seed = (candidate_path, definition_line)
+                seed_context = context
+                break
+        if seed is None:
+            return
+        chain: list[tuple[str, str, int | None]] = [(symbol, seed[0], seed[1])]
+        seen_symbols = {symbol}
+        current_symbol = symbol
+        current_path, current_line = seed
+
+        for _hop in range(1, max(1, max_symbol_hops)):
+            if seed_context:
+                context = seed_context
+            else:
+                context, _context_start = _read_hit_context(current_path, current_line)
+            seed_context = ""
+            target = _extract_thin_wrapper_target(current_symbol, context)
+            if not target or target in seen_symbols:
+                break
+            seen_symbols.add(target)
+            resolved_hit = _resolve_symbol_once(target)
+            if resolved_hit is None:
+                if _is_terminal_wrapper_target(target):
+                    chain.append((target, "<terminal>", None))
+                    break
+                chain.append((target, "<unresolved>", None))
+                break
+            hit, seed_context = resolved_hit
+            current_symbol = target
+            current_path, current_line = hit
+            chain.append((target, current_path, current_line))
+
+        if len(chain) <= 1 or len(sections) >= max_sections:
+            return
+
+        wrapper_chains_recorded.add(symbol)
+        _append_structured_wrapper_chain(state, symbol=symbol, chain=chain)
+        lines = [
+            f"{name} @ {path}:{line}" if line is not None else f"{name} @ {path}"
+            for name, path, line in chain
+        ]
+        sections.append(f"[SYMBOL_RESOLUTION_CHAIN {symbol}]\n" + "\n".join(lines))
+        definition_hints.add(
+            " -> ".join(
+                f"{name} @ {path}:{line}" if line is not None else f"{name} @ {path}"
+                for name, path, line in chain
+            )
+        )
+
+    def _probe_symbol(
+        symbol: str,
+        path: str,
+        mode: str,
+        *,
+        follow_wrappers: bool = True,
+    ) -> bool:
         if len(sections) >= max_sections or len(followup_hits) >= max_followup_hits:
             return False
         hit_found = False
@@ -493,8 +706,8 @@ def _gather_symbol_definition_hits(
             if parsed:
                 hit_found = True
                 _extend_hits(followup_hits, parsed, max_total=max_followup_hits)
-                for hit_path, hit_line in parsed[: C.PROBE_HINT_HITS]:
-                    definition_hints.add(f"{symbol} @ {hit_path}:{hit_line}")
+                if follow_wrappers:
+                    _record_wrapper_chain(symbol, parsed)
         return hit_found
 
     unresolved: list[str] = []
@@ -523,6 +736,116 @@ def _gather_symbol_definition_hits(
             unresolved_remaining.append(symbol)
 
     return followup_hits, definition_hints, unresolved_remaining
+
+
+def _append_structured_wrapper_chain(
+    state: TriageState,
+    *,
+    symbol: str,
+    chain: list[tuple[str, str, int | None]],
+) -> None:
+    existing = list(state.get("symbol_resolution_chains") or [])
+    entry = {
+        "symbol": symbol,
+        "resolution_chain": [
+            {"symbol": name, "file": path, "line": line} for name, path, line in chain
+        ],
+    }
+    existing.append(entry)
+    state["symbol_resolution_chains"] = existing
+
+
+def _extract_thin_wrapper_target(symbol: str, context: str) -> str | None:
+    wrapper = str(symbol or "").strip()
+    if not wrapper:
+        return None
+    text = context or ""
+    definition = _extract_braced_wrapper_definition(wrapper, text, 1)
+    if definition:
+        return definition[1]
+    definition = _extract_python_wrapper_definition(wrapper, text, 1)
+    if definition:
+        return definition[1]
+    return None
+
+
+def _extract_thin_wrapper_definition(
+    symbol: str, context: str, start_line: int
+) -> tuple[int, str] | None:
+    wrapper = str(symbol or "").strip()
+    if not wrapper:
+        return None
+    text = context or ""
+    definition = _extract_braced_wrapper_definition(wrapper, text, start_line)
+    if definition:
+        return definition
+    return _extract_python_wrapper_definition(wrapper, text, start_line)
+
+
+def _is_terminal_wrapper_target(symbol: str) -> bool:
+    return str(symbol or "").strip() in _TERMINAL_WRAPPER_TARGETS
+
+
+def _extract_braced_wrapper_definition(
+    symbol: str, text: str, start_line: int
+) -> tuple[int, str] | None:
+    match = re.search(
+        rf"\b{re.escape(symbol)}\s*\([^)]*\)\s*\{{(?P<body>.*?)\}}",
+        text or "",
+        flags=re.DOTALL,
+    )
+    if not match:
+        return None
+    body = _strip_comments(match.group("body"))
+    statements = [part.strip() for part in body.split(";") if part.strip()]
+    if not statements or len(statements) > 2:
+        return None
+    calls = [
+        name
+        for name in re.findall(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(", body)
+        if name != symbol
+    ]
+    unique_calls = list(dict.fromkeys(calls))
+    if len(unique_calls) != 1:
+        return None
+    line = start_line + (text or "")[: match.start()].count("\n")
+    return line, unique_calls[0]
+
+
+def _extract_python_wrapper_definition(
+    symbol: str, text: str, start_line: int
+) -> tuple[int, str] | None:
+    match = re.search(
+        rf"def\s+{re.escape(symbol)}\s*\([^)]*\):(?P<body>.*?)(?:\ndef\s+|\nclass\s+|\Z)",
+        text or "",
+        flags=re.DOTALL,
+    )
+    if not match:
+        return None
+    body_lines = [
+        line.strip()
+        for line in match.group("body").splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    ]
+    if not body_lines or len(body_lines) > 2:
+        return None
+    calls = [
+        name
+        for name in re.findall(
+            r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(", "\n".join(body_lines)
+        )
+        if name != symbol
+    ]
+    unique_calls = list(dict.fromkeys(calls))
+    if len(unique_calls) != 1:
+        return None
+    line = start_line + (text or "")[: match.start()].count("\n")
+    return line, unique_calls[0]
+
+
+def _strip_comments(text: str) -> str:
+    no_block = re.sub(r"/\*.*?\*/", "", text or "", flags=re.DOTALL)
+    return re.sub(r"//.*", "", no_block)
 
 
 def _collect_hit_context_sections(

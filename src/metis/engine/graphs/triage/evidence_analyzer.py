@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 from metis.engine.analysis.base import AnalyzerRequest
 
 from . import constants as C
@@ -98,11 +100,11 @@ def _collect_analyzer_sections(
 
 
 def _finalize_evidence_pack_state(
-    state: TriageState, sections: list[str]
+    state: TriageState, sections: list[str], *, max_chars: int = C.EVIDENCE_PACK_MAX_CHARS
 ) -> TriageState:
     evidence_pack = "\n\n".join(sections)
-    if len(evidence_pack) > C.EVIDENCE_PACK_MAX_CHARS:
-        evidence_pack = evidence_pack[: C.EVIDENCE_PACK_MAX_CHARS] + "\n...[truncated]"
-    new_state: TriageState = dict(state)
+    if len(evidence_pack) > max_chars:
+        evidence_pack = evidence_pack[:max_chars] + "\n...[truncated]"
+    new_state = cast(TriageState, state.copy())
     new_state["evidence_pack"] = evidence_pack
     return new_state

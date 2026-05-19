@@ -10,6 +10,7 @@ from .static_tools import StaticToolRunner
 def get_tool_policies() -> dict[str, tuple[str, ...]]:
     return {
         "triage_evidence": ("grep", "find_name", "cat", "sed"),
+        "review_context": ("get_function_body", "get_callers", "grep_repo"),
     }
 
 
@@ -19,6 +20,7 @@ def _build_providers(context: ToolContext) -> dict[str, object]:
             codebase_path=context.codebase_path,
             timeout_seconds=context.timeout_seconds,
             max_chars=context.max_chars,
+            function_index=context.function_index,
         )
     }
 
@@ -70,27 +72,45 @@ def get_tool_definitions() -> tuple[ToolDefinition, ...]:
     return (
         ToolDefinition(
             name="grep",
-            domains=tuple(get_tool_policies()),
+            domains=("triage_evidence",),
             provider="static",
             operation="grep",
         ),
         ToolDefinition(
             name="find_name",
-            domains=tuple(get_tool_policies()),
+            domains=("triage_evidence",),
             provider="static",
             operation="find_name",
         ),
         ToolDefinition(
             name="cat",
-            domains=tuple(get_tool_policies()),
+            domains=("triage_evidence",),
             provider="static",
             operation="cat",
         ),
         ToolDefinition(
             name="sed",
-            domains=tuple(get_tool_policies()),
+            domains=("triage_evidence",),
             provider="static",
             operation="sed",
+        ),
+        ToolDefinition(
+            name="get_function_body",
+            domains=("review_context",),
+            provider="static",
+            operation="get_function_body",
+        ),
+        ToolDefinition(
+            name="get_callers",
+            domains=("review_context",),
+            provider="static",
+            operation="get_callers",
+        ),
+        ToolDefinition(
+            name="grep_repo",
+            domains=("review_context",),
+            provider="static",
+            operation="grep_repo",
         ),
     )
 
@@ -101,11 +121,13 @@ def build_toolbox(
     codebase_path: str,
     timeout_seconds: int = 8,
     max_chars: int = 16000,
+    function_index=None,
 ) -> ToolBox:
     context = ToolContext(
         codebase_path=codebase_path,
         timeout_seconds=timeout_seconds,
         max_chars=max_chars,
+        function_index=function_index,
     )
     policies = get_tool_policies()
     definitions = get_tool_definitions()

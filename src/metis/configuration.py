@@ -3,12 +3,20 @@
 
 import os
 import logging
-import yaml
+import yaml  # type: ignore[import-untyped]
 
 from importlib.resources import files, as_file
 from pathlib import Path
 
 logger = logging.getLogger("metis")
+
+DEFAULT_EMBED_BATCH_SIZE = 16
+
+
+def _embedding_extra_kwargs(raw: object, embed_batch_size: int) -> dict[str, object]:
+    kwargs: dict[str, object] = dict(raw) if isinstance(raw, dict) else {}
+    kwargs.setdefault("embed_batch_size", embed_batch_size)
+    return kwargs
 
 
 def load_yaml(path):
@@ -18,6 +26,8 @@ def load_yaml(path):
 
 def load_runtime_config(config_path=None, enable_psql=False):
     cfg = load_metis_config(config_path)
+    engine_cfg = cfg.get("metis_engine", {})
+    embed_batch_size = int(engine_cfg.get("embed_batch_size", DEFAULT_EMBED_BATCH_SIZE))
 
     runtime: dict[str, object] = {}
     if enable_psql:
@@ -47,11 +57,14 @@ def load_runtime_config(config_path=None, enable_psql=False):
     llm_cfg = cfg.get("llm_provider", {})
     runtime["code_embedding_model"] = llm_cfg.get("code_embedding_model", "")
     runtime["docs_embedding_model"] = llm_cfg.get("docs_embedding_model", "")
-    runtime["code_embedding_extra_kwargs"] = llm_cfg.get(
-        "code_embedding_extra_kwargs", {}
+    runtime["embed_batch_size"] = embed_batch_size
+    runtime["code_embedding_extra_kwargs"] = _embedding_extra_kwargs(
+        llm_cfg.get("code_embedding_extra_kwargs", {}),
+        embed_batch_size,
     )
-    runtime["docs_embedding_extra_kwargs"] = llm_cfg.get(
-        "docs_embedding_extra_kwargs", {}
+    runtime["docs_embedding_extra_kwargs"] = _embedding_extra_kwargs(
+        llm_cfg.get("docs_embedding_extra_kwargs", {}),
+        embed_batch_size,
     )
 
     llm_provider_name = cfg.get("llm_provider", {}).get("name", "").lower()
@@ -64,6 +77,9 @@ def load_runtime_config(config_path=None, enable_psql=False):
             )
         runtime["llm_api_key"] = llm_api_key
         runtime["model"] = llm_cfg.get("model", "")
+        runtime["openai_api_base"] = os.environ.get("OPENAI_BASE_URL") or llm_cfg.get(
+            "base_url", ""
+        )
     elif llm_provider_name == "azure_openai":
         llm_api_key = os.environ.get("AZURE_OPENAI_API_KEY")
         if not llm_api_key:
@@ -110,9 +126,20 @@ def load_runtime_config(config_path=None, enable_psql=False):
         raise ValueError(f"Unsupported LLM provider: {llm_provider_name}")
 
     # Engine/vector store settings
-    engine_cfg = cfg.get("metis_engine", {})
     runtime["max_token_length"] = engine_cfg.get("max_token_length", 100000)
     runtime["max_workers"] = engine_cfg.get("max_workers", 8)
+    runtime["review_max_workers"] = int(
+        engine_cfg.get("review_max_workers", runtime["max_workers"])
+    )
+    runtime["triage_max_workers"] = int(
+        engine_cfg.get("triage_max_workers", runtime["max_workers"])
+    )
+    runtime["retrieval_cache_max_entries"] = int(
+        engine_cfg.get("retrieval_cache_max_entries", 1024)
+    )
+    runtime["embed_cache_enabled"] = bool(engine_cfg.get("embed_cache_enabled", True))
+    runtime["embed_cache_max_mb"] = int(engine_cfg.get("embed_cache_max_mb", 500))
+    runtime["async_llm_enabled"] = bool(engine_cfg.get("async_llm_enabled", False))
     runtime["embed_dim"] = engine_cfg.get("embed_dim", 1536)
     runtime["doc_chunk_size"] = engine_cfg.get("doc_chunk_size", 1024)
     runtime["doc_chunk_overlap"] = engine_cfg.get("doc_chunk_overlap", 200)
@@ -135,6 +162,28 @@ def load_runtime_config(config_path=None, enable_psql=False):
     )
     runtime["review_code_exclude_paths"] = engine_cfg.get(
         "review_code_exclude_paths", []
+    )
+
+    filters_cfg = cfg.get("filters", {}) or {}
+    runtime["skip_test_files"] = bool(filters_cfg.get("skip_test_files", False))
+    extra_test_patterns = filters_cfg.get("extra_test_path_patterns", []) or []
+    runtime["extra_test_path_patterns"] = [
+        str(pattern) for pattern in extra_test_patterns if str(pattern or "").strip()
+    ]
+
+    review_cfg = cfg.get("review", {}) or {}
+    agentic_cfg = review_cfg.get("agentic", {}) or {}
+    runtime["review_mode"] = str(review_cfg.get("mode", "standard") or "standard")
+    runtime["review_agentic_max_iterations"] = int(agentic_cfg.get("max_iterations", 2))
+    runtime["review_agentic_max_tool_calls"] = int(agentic_cfg.get("max_tool_calls", 4))
+    runtime["review_agentic_tool_timeout_seconds"] = int(
+        agentic_cfg.get("tool_timeout_seconds", 5)
+    )
+    runtime["review_agentic_max_extra_tokens"] = int(
+        agentic_cfg.get("max_extra_tokens", 8000)
+    )
+    runtime["review_agentic_wallclock_seconds"] = float(
+        agentic_cfg.get("wallclock_seconds", 60.0)
     )
 
     # Query config

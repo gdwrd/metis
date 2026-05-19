@@ -5,12 +5,14 @@ import argparse
 from datetime import datetime
 import logging
 from pathlib import Path
+import shlex
 
 from rich.markup import escape
 from prompt_toolkit import prompt
 from prompt_toolkit.history import InMemoryHistory
 
 from metis.configuration import load_runtime_config
+from metis.bench import BenchmarkRegressionError
 from metis.engine import MetisEngine
 from metis.usage import UsageRuntime
 from metis.utils import read_file_content
@@ -92,6 +94,17 @@ def build_engine(args, runtime):
     llm_provider = provider_cls(runtime)
 
     usage_runtime = UsageRuntime(args.codebase_path)
+    if runtime.get("embed_cache_enabled") and not runtime.get("embed_cache_path"):
+        if args.backend == "postgres":
+            runtime["embed_cache_path"] = str(
+                Path(args.codebase_path)
+                / ".metis"
+                / f"{args.project_schema}_embed_cache.sqlite"
+            )
+        else:
+            runtime["embed_cache_path"] = str(
+                Path(args.chroma_dir) / "embed_cache.sqlite"
+            )
     embed_model_code = llm_provider.get_embed_model_code(
         **usage_runtime.hooks.embed_model_kwargs()
     )
@@ -255,10 +268,15 @@ def run_non_interactive(engine, args):
             args.quiet,
         )
         return 1, None
-    parts = args.command.strip().split()
+    parts = shlex.split(args.command.strip())
     cmd, cmd_args = parts[0], parts[1:]
     try:
         result = execute_command(engine, cmd, cmd_args, args)
+    except BenchmarkRegressionError as e:
+        print_console(
+            f"[bold red]Benchmark regression:[/bold red] {escape(str(e))}", args.quiet
+        )
+        return 1, None
     except Exception as e:
         print_console(f"[bold red]Error:[/bold red] {escape(str(e))}", args.quiet)
         return 1, None
@@ -309,6 +327,17 @@ def run_interactive_loop(engine, args, vector_backend):
 
 
 def main():
+    tui_requested = False
+    import sys
+
+    if len(sys.argv) > 1 and sys.argv[1] == "tui":
+        tui_requested = True
+        sys.argv = [sys.argv[0], *sys.argv[2:]]
+
+    if len(sys.argv) > 1 and sys.argv[1] == "bench":
+        bench_command = " ".join(shlex.quote(part) for part in sys.argv[1:])
+        sys.argv = [sys.argv[0], "--non-interactive", "--command", bench_command]
+
     parser = argparse.ArgumentParser(
         description="Metis: AI security focused code review.",
         formatter_class=argparse.RawTextHelpFormatter,
@@ -366,6 +395,53 @@ def main():
         action="store_true",
         help="Allow selected analysis commands to run without an index-backed context.",
     )
+    parser.add_argument(
+        "--no-embed-cache",
+        action="store_true",
+        help="Disable the local disk embedding cache for indexing.",
+    )
+    parser.add_argument(
+        "--async-llm",
+        action="store_true",
+        help="Use opt-in async LLM graph orchestration for supported review and triage paths.",
+    )
+    parser.add_argument(
+        "--review-mode",
+        choices=["standard", "agentic"],
+        default=None,
+        help="Review execution mode for review commands (default from config: standard).",
+    )
+    parser.add_argument(
+        "--skip-test-files",
+        dest="skip_test_files",
+        action="store_true",
+        default=None,
+        help="Skip files that match test/fixture path heuristics during review and triage.",
+    )
+    parser.add_argument(
+        "--no-skip-test-files",
+        dest="skip_test_files",
+        action="store_false",
+        help="Disable test/fixture path filtering even if enabled in config.",
+    )
+    parser.add_argument(
+        "--review-max-workers",
+        type=int,
+        default=None,
+        help="Override the worker count for review_code.",
+    )
+    parser.add_argument(
+        "--review-agentic-wallclock",
+        type=float,
+        default=None,
+        help="Best-effort per-file wall-clock budget in seconds for agentic review.",
+    )
+    parser.add_argument(
+        "--triage-max-workers",
+        type=int,
+        default=None,
+        help="Override the worker count for triage.",
+    )
 
     args = parser.parse_args()
 
@@ -383,20 +459,83 @@ def main():
         )
         exit(1)
     if args.version:
-        COMMANDS["version"].invoke(None, [], args)
+        COMMANDS["version"].invoke(None, [], args, None)
         return
 
     configure_logger(logger, args)
+    if tui_requested:
+        from metis.tui.app import run_tui
+        from metis.tui.bootstrap import bootstrap_tui_session
+
+        session = bootstrap_tui_session(
+            args,
+            load_runtime_config=load_runtime_config,
+            build_engine=build_engine,
+        )
+        run_tui(session.engine, args, startup_state=session.startup_state)
+        return
+
     runtime = load_runtime_config(enable_psql=(args.backend == "postgres"))
+    if args.no_embed_cache:
+        runtime["embed_cache_enabled"] = False
+    if args.async_llm:
+        runtime["async_llm_enabled"] = True
+    if args.review_max_workers is None:
+        args.review_max_workers = int(
+            runtime.get("review_max_workers", runtime.get("max_workers", 8))
+        )
+    elif args.review_max_workers <= 0:
+        parser.error("--review-max-workers must be positive")
+    else:
+        runtime["review_max_workers"] = int(args.review_max_workers)
+    if args.triage_max_workers is None:
+        args.triage_max_workers = int(
+            runtime.get("triage_max_workers", runtime.get("max_workers", 8))
+        )
+    elif args.triage_max_workers <= 0:
+        parser.error("--triage-max-workers must be positive")
+    else:
+        runtime["triage_max_workers"] = int(args.triage_max_workers)
+    if args.skip_test_files is None:
+        args.skip_test_files = bool(runtime.get("skip_test_files", False))
+    else:
+        runtime["skip_test_files"] = bool(args.skip_test_files)
+    args.extra_test_path_patterns = tuple(
+        runtime.get("extra_test_path_patterns", []) or []
+    )
+    if args.review_mode is None:
+        args.review_mode = str(runtime.get("review_mode", "standard") or "standard")
+    args.review_agentic_max_iterations = int(
+        runtime.get("review_agentic_max_iterations", 2)
+    )
+    args.review_agentic_max_tool_calls = int(
+        runtime.get("review_agentic_max_tool_calls", 4)
+    )
+    args.review_agentic_tool_timeout_seconds = int(
+        runtime.get("review_agentic_tool_timeout_seconds", 5)
+    )
+    args.review_agentic_max_extra_tokens = int(
+        runtime.get("review_agentic_max_extra_tokens", 8000)
+    )
+    if args.review_agentic_wallclock is None:
+        args.review_agentic_wallclock_seconds = float(
+            runtime.get("review_agentic_wallclock_seconds", 60.0)
+        )
+    elif args.review_agentic_wallclock < 0:
+        parser.error("--review-agentic-wallclock must be non-negative")
+    else:
+        runtime["review_agentic_wallclock_seconds"] = float(
+            args.review_agentic_wallclock
+        )
+        args.review_agentic_wallclock_seconds = float(args.review_agentic_wallclock)
     engine, vector_backend = build_engine(args, runtime)
     exit_code = 0
     farewell = None
     try:
         if args.non_interactive:
             exit_code, farewell = run_non_interactive(engine, args)
-            return
-
-        farewell = run_interactive_loop(engine, args, vector_backend)
+        else:
+            farewell = run_interactive_loop(engine, args, vector_backend)
     finally:
         finalize_cli_session_and_close(engine, args, farewell)
     if exit_code:

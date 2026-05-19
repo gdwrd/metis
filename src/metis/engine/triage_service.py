@@ -31,6 +31,9 @@ class TriageService(TriageServiceRuntimeMixin, TriageServiceExecutionMixin):
         create_query_engines: Callable[[int], tuple[Any, Any]],
         get_plugin_for_extension: Callable[[str], Any],
         usage_hooks: UsageHooks | None = None,
+        async_llm_enabled: bool = False,
+        skip_test_files: bool = False,
+        extra_test_path_patterns: list[str] | None = None,
     ):
         self.codebase_path = codebase_path
         self.llm_provider = llm_provider
@@ -44,6 +47,13 @@ class TriageService(TriageServiceRuntimeMixin, TriageServiceExecutionMixin):
         self._create_query_engines = create_query_engines
         self._get_plugin_for_extension = get_plugin_for_extension
         self._usage_hooks = usage_hooks
+        self.async_llm_enabled = bool(async_llm_enabled)
+        self.skip_test_files = bool(skip_test_files)
+        self.extra_test_path_patterns = [
+            str(pattern)
+            for pattern in extra_test_path_patterns or []
+            if str(pattern or "").strip()
+        ]
 
         self._triage_graph_local = threading.local()
         self._triage_query_engines_local = threading.local()

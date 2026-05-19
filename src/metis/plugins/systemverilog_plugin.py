@@ -11,6 +11,7 @@ class SystemVerilogPlugin(ConfigBackedLanguagePlugin):
 
     NAME = "systemverilog"
     DEFAULT_EXTENSIONS = [".sv", ".svh"]
+    DEFAULT_TEST_PATH_PATTERNS = ["*_tb.sv", "*_tb.svh", "tb_*.sv"]
 
     def get_splitter(self):
         splitting_cfg = self._plugin_section().get("splitting", {})

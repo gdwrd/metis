@@ -2,12 +2,12 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from .evidence import triage_node_collect_evidence
-from .llm import triage_node_llm
+from .llm import triage_node_llm, triage_node_llm_async
 from .retrieval import triage_node_retrieve
-
 
 __all__ = [
     "triage_node_retrieve",
     "triage_node_collect_evidence",
     "triage_node_llm",
+    "triage_node_llm_async",
 ]

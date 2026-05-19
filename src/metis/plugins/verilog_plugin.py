@@ -9,3 +9,4 @@ class VerilogPlugin(ConfigBackedLanguagePlugin):
 
     NAME = "verilog"
     DEFAULT_EXTENSIONS = [".v", ".vh"]
+    DEFAULT_TEST_PATH_PATTERNS = ["*_tb.v", "*_tb.vh", "tb_*.v"]

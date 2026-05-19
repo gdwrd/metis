@@ -10,6 +10,7 @@ from rich.markup import escape
 
 from .command_runtime import CommandRuntime
 from .commands import (
+    run_bench,
     run_ask,
     run_file_review,
     run_index,
@@ -22,8 +23,9 @@ from .commands import (
 )
 from .utils import print_console
 
-
-InvocationMode = Literal["none", "path", "question", "index", "args", "meta"]
+InvocationMode = Literal[
+    "none", "path", "question", "index", "args", "command_args", "meta"
+]
 IndexPolicy = Literal["none", "required", "optional"]
 
 
@@ -100,6 +102,9 @@ class CommandSpec:
         if self.invocation_mode == "args":
             self.handler(engine, args, runtime)
             return
+        if self.invocation_mode == "command_args":
+            self.handler(engine, cmd_args, args, runtime)
+            return
         if self.invocation_mode == "meta":
             self.handler(args)
             return
@@ -112,6 +117,13 @@ COMMANDS = {
         tracked=True,
         invocation_mode="index",
         prepares_output_file=True,
+    ),
+    "bench": CommandSpec(
+        run_bench,
+        tracked=True,
+        invocation_mode="command_args",
+        prepares_output_file=True,
+        index_policy="none",
     ),
     "review_patch": CommandSpec(
         run_review,

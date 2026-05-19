@@ -8,6 +8,7 @@ class PHPPlugin(ConfigBackedLanguagePlugin):
     """Language plugin providing PHP-specific splitter and prompts."""
 
     NAME = "php"
+    DEFAULT_TEST_PATH_PATTERNS = ["*Test.php"]
     DEFAULT_EXTENSIONS = [
         ".php",
         ".phps",
