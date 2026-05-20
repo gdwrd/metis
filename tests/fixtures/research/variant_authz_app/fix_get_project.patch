@@ -1,0 +1,11 @@
+diff --git a/app.py b/app.py
+index 1111111..2222222 100644
+--- a/app.py
++++ b/app.py
+@@ -13,6 +13,7 @@ def load_project(project_id):
+ 
+ 
+ @route("/projects/<project_id>")
++@require_project_member
+ def get_project(project_id):
+     return load_project(project_id)

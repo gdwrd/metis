@@ -14,10 +14,12 @@ from .commands import (
     run_ask,
     run_file_review,
     run_index,
+    run_research,
     run_review,
     run_review_code,
     run_triage,
     run_update,
+    run_variants,
     show_help,
     show_version,
 )
@@ -120,6 +122,20 @@ COMMANDS = {
     ),
     "bench": CommandSpec(
         run_bench,
+        tracked=True,
+        invocation_mode="command_args",
+        prepares_output_file=True,
+        index_policy="none",
+    ),
+    "research": CommandSpec(
+        run_research,
+        tracked=True,
+        invocation_mode="command_args",
+        prepares_output_file=True,
+        index_policy="none",
+    ),
+    "variants": CommandSpec(
+        run_variants,
         tracked=True,
         invocation_mode="command_args",
         prepares_output_file=True,

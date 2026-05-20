@@ -10,6 +10,10 @@ class _ArtifactPaths:
     def __init__(self, base):
         self.review_sarif = base / "results" / "tui" / "run" / "review.sarif"
         self.triage_sarif = base / "results" / "tui" / "run" / "triage.sarif"
+        self.research_sarif = base / "results" / "tui" / "run" / "research.sarif"
+        self.research_report = (
+            base / "results" / "tui" / "run" / "research-report.json"
+        )
         self.security_report = base / "results" / "tui" / "run" / "security-report.md"
 
 
@@ -28,6 +32,13 @@ class _DomainRunner:
         self.artifacts.paths.review_sarif.parent.mkdir(parents=True, exist_ok=True)
         if request.name == "security_report":
             self.artifacts.paths.security_report.write_text("report", encoding="utf-8")
+        elif request.name == "research":
+            self.artifacts.paths.research_report.write_text("{}", encoding="utf-8")
+            self.artifacts.paths.research_sarif.write_text("sarif", encoding="utf-8")
+            self.artifacts.paths.security_report.write_text(
+                "security report",
+                encoding="utf-8",
+            )
         else:
             self.artifacts.paths.review_sarif.write_text("sarif", encoding="utf-8")
 
@@ -205,6 +216,36 @@ def test_agent_tool_runner_executes_security_report_and_copies_markdown(tmp_path
     ) == "report"
     assert "default_report=" in result
     assert "output_file=" in result
+
+
+def test_agent_tool_runner_executes_research_and_copies_json_report(tmp_path):
+    domain = _DomainRunner(tmp_path)
+    runner = TuiAgentToolRunner(tmp_path, domain_runner=domain)
+
+    result = runner.run(
+        "research",
+        output_file="results/research-report.json",
+    )
+
+    assert domain.requests[0].name == "research"
+    assert domain.requests[0].args == ()
+    assert (tmp_path / "results" / "research-report.json").read_text(
+        encoding="utf-8"
+    ) == "{}"
+    assert "default_report=" in result
+    assert "default_sarif=" in result
+    assert "default_security_report=" in result
+    assert "output_file=" in result
+
+
+def test_agent_tool_runner_allows_explicit_research_hunter_override(tmp_path):
+    domain = _DomainRunner(tmp_path)
+    runner = TuiAgentToolRunner(tmp_path, domain_runner=domain)
+
+    runner.run("research", hunters="authz_outlier,ssrf")
+
+    assert domain.requests[0].name == "research"
+    assert domain.requests[0].args == ("--hunters", "authz_outlier,ssrf")
 
 
 def test_agent_tool_runner_rejects_non_markdown_security_report_output(tmp_path):

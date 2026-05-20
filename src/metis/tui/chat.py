@@ -138,8 +138,9 @@ class TuiChatSession:
     def _messages(self, message: str) -> list[tuple[str, str]]:
         system = [
             "You are Arm Metis, an AI assistant for source security review.",
-            "Answer directly. When the user asks you to run Metis workflows such as review_code, review_file, review_patch, index, triage, or security_report, call the matching controlled tool.",
+            "Answer directly. When the user asks you to run Metis workflows such as review_code, review_file, review_patch, research, index, triage, or security_report, call the matching controlled tool.",
             "When the user asks for the whole flow, full flow, run everything, full review, full scan, end-to-end run, or similar broad workflow, call this ordered chain in one tool_calls response: index(), review_code(output_file='results/review.sarif', use_retrieval_context=true), triage(path='results/review.sarif', output_file='results/triage.sarif', use_retrieval_context=true), then security_report(path='results/triage.sarif', output_file='results/security-report.md').",
+            "When the user asks for research flow, vulnerability research, security research, or to find vulnerabilities with research, call research(output_file='results/research-report.json') only. The research tool runs all default hunters for the launched project and then writes a Markdown security report from its research SARIF.",
             "Do not treat broad workflow requests as a single tool call. Do not stop after index when the user asked to run everything.",
             "Do not refuse because of filesystem access or SARIF writing; controlled tools provide that capability and save review SARIF by default.",
             "Do not claim to run tools unless a tool event confirms it.",
@@ -241,6 +242,17 @@ class TuiChatSession:
             sarif_path = data.get("output_file") or data.get("default_sarif")
             if sarif_path:
                 lines.append(f"Triage SARIF saved: {sarif_path}")
+        elif name == "research":
+            lines = ["Research flow completed."]
+            report_path = data.get("output_file") or data.get("default_report")
+            if report_path:
+                lines.append(f"Research report saved: {report_path}")
+            sarif_path = data.get("default_sarif")
+            if sarif_path:
+                lines.append(f"Research SARIF saved: {sarif_path}")
+            security_report_path = data.get("default_security_report")
+            if security_report_path:
+                lines.append(f"Security report saved: {security_report_path}")
         elif name == "security_report":
             lines = ["Security report completed."]
             report_path = data.get("output_file") or data.get("default_report")
@@ -278,11 +290,20 @@ class TuiChatSession:
             if artifact_path:
                 if name == "security_report":
                     label = "Report"
+                elif name == "research":
+                    label = "Research report"
                 elif name == "triage":
                     label = "Triage SARIF"
                 else:
                     label = "SARIF"
                 lines.append(f"  {label} saved: {artifact_path}")
+            if name == "research":
+                sarif_path = data.get("default_sarif")
+                if sarif_path:
+                    lines.append(f"  Research SARIF saved: {sarif_path}")
+                security_report_path = data.get("default_security_report")
+                if security_report_path:
+                    lines.append(f"  Security report saved: {security_report_path}")
             log_path = data.get("log_file")
             if log_path:
                 lines.append(f"  Log: {log_path}")

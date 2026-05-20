@@ -31,6 +31,28 @@ def test_get_missing_plugin_raises(engine):
         engine.get_plugin_from_name("nonexistent")
 
 
+def test_engine_exposes_research_service_and_metis_research_paths(engine):
+    assert engine.research is not None
+    assert engine.repository.get_security_model_path().endswith(
+        ".metis/security_model.json"
+    )
+    assert engine.repository.get_security_graph_path().endswith(
+        ".metis/security_graph.json"
+    )
+    assert engine.repository.get_research_hypotheses_path().endswith(
+        ".metis/research/hypotheses.jsonl"
+    )
+    assert engine.repository.get_research_evidence_path().endswith(
+        ".metis/research/evidence.jsonl"
+    )
+    assert engine.repository.get_research_lessons_path().endswith(
+        ".metis/research/lessons.jsonl"
+    )
+    assert engine.repository.get_research_proofs_dir().endswith(
+        ".metis/research/proofs"
+    )
+
+
 def test_init_and_get_query_engines_raises_on_missing_backend():
     bad_backend = Mock()
     bad_backend.init = Mock()
@@ -326,6 +348,29 @@ def test_close_clears_query_cache_and_closes_backend():
 
     assert engine._init_and_get_query_engines() == ("code-qe", "docs-qe")
     assert backend.get_query_engines.call_count == 2
+
+
+def test_close_shuts_down_research_service():
+    backend = Mock()
+    backend.init = Mock()
+    backend.get_query_engines = Mock(return_value=("code-qe", "docs-qe"))
+    llm_provider = Mock()
+    llm_provider.get_embed_model_code.return_value = Mock()
+    llm_provider.get_embed_model_docs.return_value = Mock()
+    engine = MetisEngine(
+        vector_backend=backend,
+        llm_provider=llm_provider,
+        max_workers=2,
+        max_token_length=2048,
+        llama_query_model="gpt-test",
+        similarity_top_k=3,
+        response_mode="compact",
+    )
+    engine.research.shutdown = Mock()
+
+    engine.close()
+
+    engine.research.shutdown.assert_called_once_with()
 
 
 def test_query_engine_retrievers_cache_repeated_queries_per_engine():

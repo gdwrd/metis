@@ -17,6 +17,43 @@ class CPlugin(ConfigBackedLanguagePlugin):
             "import": ["preproc_include"],
         }
 
+    def get_analyzer_config(self):
+        config = super().get_analyzer_config()
+        config.update(
+            {
+                "lifetime_sink_names": [
+                    "free",
+                    "kfree",
+                    "vfree",
+                    "delete",
+                    "drop",
+                ],
+                "lifetime_guard_names": [
+                    "refcount_dec_and_test",
+                    "mutex_lock",
+                    "spin_lock",
+                    "memset_s",
+                    "zeroize",
+                ],
+                "hardware_sink_names": [
+                    "write_reg",
+                    "register_write",
+                    "mmio_write",
+                    "csr_write",
+                    "set_privilege",
+                    "enable_debug",
+                ],
+                "hardware_guard_names": [
+                    "is_privileged",
+                    "lifecycle_is_secure",
+                    "check_permission",
+                    "is_locked",
+                    "allow_debug",
+                ],
+            }
+        )
+        return config
+
     def get_triage_analyzer_factory(self):
         from metis.engine.analysis.c_family_analyzer import (
             build_c_family_analyzer_factory,

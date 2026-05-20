@@ -26,6 +26,7 @@ def test_bootstrap_tui_captures_config_failure_without_building_engine():
     assert session.engine is None
     assert session.startup_state.chat_enabled is False
     assert session.startup_state.stage == "config"
+    assert session.runtime == {}
     assert calls == []
 
 
@@ -47,3 +48,23 @@ def test_bootstrap_tui_captures_engine_failure_with_provider_metadata():
     assert session.startup_state.provider_name == "openai"
     assert session.startup_state.model == "gpt-test"
     assert session.startup_state.base_url == "https://example.test/v1"
+    assert session.runtime == runtime
+
+
+def test_bootstrap_tui_preserves_runtime_defaults_for_domain_runner():
+    runtime = {
+        "research_hunters": "ssrf",
+        "research_budget": "quick",
+    }
+    engine = object()
+    vector_backend = object()
+
+    session = bootstrap_tui_session(
+        _args(),
+        load_runtime_config=lambda **_kwargs: runtime,
+        build_engine=lambda *_args: (engine, vector_backend),
+    )
+
+    assert session.engine is engine
+    assert session.vector_backend is vector_backend
+    assert session.runtime == runtime

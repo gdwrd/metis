@@ -108,6 +108,37 @@ query:
     assert runtime["llama_query_reasoning_effort"] == "low"
 
 
+def test_load_runtime_config_reads_research_defaults(tmp_path, monkeypatch):
+    config_path = tmp_path / "metis.yaml"
+    config_path.write_text(
+        """
+llm_provider:
+  name: openai
+  model: gpt-test
+research:
+  hunters:
+    - authz_outlier
+    - ssrf
+  budget: quick
+  emit_killed: true
+  emit_unresolved: true
+  proof_artifacts: true
+  evidence_policy: triage_evidence
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+
+    runtime = load_runtime_config(config_path)
+
+    assert runtime["research_hunters"] == "authz_outlier,ssrf"
+    assert runtime["research_budget"] == "quick"
+    assert runtime["research_emit_killed"] is True
+    assert runtime["research_emit_unresolved"] is True
+    assert runtime["research_proof_artifacts"] is True
+    assert runtime["research_evidence_policy"] == "triage_evidence"
+
+
 def test_load_runtime_config_reads_provider_reasoning_effort(tmp_path, monkeypatch):
     config_path = tmp_path / "metis.yaml"
     config_path.write_text(

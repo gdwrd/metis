@@ -19,6 +19,7 @@ class ReviewAgenticOptions:
 class ReviewOptions:
     use_retrieval_context: bool = True
     review_mode: str = "standard"
+    review_profile: str = "normal"
     agentic: ReviewAgenticOptions = ReviewAgenticOptions()
     skip_test_files: bool = False
     extra_test_path_patterns: tuple[str, ...] = ()
@@ -27,6 +28,9 @@ class ReviewOptions:
         normalized = _normalize_review_mode(self.review_mode)
         if normalized != self.review_mode:
             object.__setattr__(self, "review_mode", normalized)
+        normalized_profile = _normalize_review_profile(self.review_profile)
+        if normalized_profile != self.review_profile:
+            object.__setattr__(self, "review_profile", normalized_profile)
         if isinstance(self.extra_test_path_patterns, str):
             object.__setattr__(
                 self,
@@ -70,6 +74,7 @@ def coerce_review_options(
     *,
     use_retrieval_context: bool | None = None,
     review_mode: str | None = None,
+    review_profile: str | None = None,
     agentic: ReviewAgenticOptions | None = None,
     skip_test_files: bool | None = None,
     extra_test_path_patterns: tuple[str, ...] | list[str] | None = None,
@@ -80,6 +85,7 @@ def coerce_review_options(
                 True if use_retrieval_context is None else use_retrieval_context
             ),
             review_mode=_normalize_review_mode(review_mode),
+            review_profile=_normalize_review_profile(review_profile),
             agentic=agentic or ReviewAgenticOptions(),
             skip_test_files=False if skip_test_files is None else skip_test_files,
             extra_test_path_patterns=_coerce_path_patterns(extra_test_path_patterns),
@@ -87,11 +93,13 @@ def coerce_review_options(
     if (
         use_retrieval_context is None
         and review_mode is None
+        and review_profile is None
         and agentic is None
         and skip_test_files is None
         and extra_test_path_patterns is None
     ):
         _normalize_review_mode(options.review_mode)
+        _normalize_review_profile(options.review_profile)
         return options
     return ReviewOptions(
         use_retrieval_context=(
@@ -103,6 +111,11 @@ def coerce_review_options(
             options.review_mode
             if review_mode is None
             else _normalize_review_mode(review_mode)
+        ),
+        review_profile=(
+            options.review_profile
+            if review_profile is None
+            else _normalize_review_profile(review_profile)
         ),
         agentic=agentic or options.agentic,
         skip_test_files=(
@@ -121,6 +134,13 @@ def _normalize_review_mode(value: str | None) -> str:
     if mode not in {"standard", "agentic"}:
         raise ValueError(f"Unsupported review mode: {value}")
     return mode
+
+
+def _normalize_review_profile(value: str | None) -> str:
+    profile = (value or "normal").strip().lower()
+    if profile not in {"normal", "research"}:
+        raise ValueError(f"Unsupported review profile: {value}")
+    return profile
 
 
 def _coerce_path_patterns(value) -> tuple[str, ...]:

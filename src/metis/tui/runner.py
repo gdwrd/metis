@@ -12,6 +12,7 @@ from uuid import uuid4
 
 from metis.cli.exporters import export_sarif
 from metis.engine.options import ReviewOptions, TriageOptions
+from metis.engine.research import DEFAULT_RESEARCH_HUNTERS, ResearchOptions
 
 from .artifacts import (
     TuiArtifactStore,
@@ -19,7 +20,7 @@ from .artifacts import (
     find_latest_triage_sarif,
 )
 from .chat_model import TuiChatModelAdapter
-from .commands import TuiCommandRequest
+from .commands import TuiCommandRequest, parse_research_command_options
 from .context import write_context_document
 from .events import EventLevel, TuiEvent, utc_now_iso
 from .sanitize import sanitize_text, sanitize_value
@@ -44,6 +45,48 @@ class TriageInputRequiredError(FileNotFoundError):
     """Raised when /triage needs an explicit SARIF path from the TUI."""
 
 
+def _parse_runtime_hunters(raw: Any) -> tuple[str, ...]:
+    if raw is None:
+        return DEFAULT_RESEARCH_HUNTERS
+    if isinstance(raw, str):
+        hunters = tuple(item.strip() for item in raw.split(",") if item.strip())
+    else:
+        hunters = tuple(str(item).strip() for item in raw if str(item).strip())
+    return hunters or DEFAULT_RESEARCH_HUNTERS
+
+
+def _bool_default(
+    value: bool | None,
+    runtime: dict[str, Any],
+    key: str,
+    *,
+    default: bool,
+) -> bool:
+    if value is not None:
+        return bool(value)
+    return bool(runtime.get(key, default))
+
+
+def _text_default(
+    value: str | None,
+    runtime: dict[str, Any],
+    key: str,
+    *,
+    default: str,
+) -> str:
+    if value is not None:
+        return str(value or default)
+    return str(runtime.get(key, default) or default)
+
+
+def _path_patterns_default(raw: Any) -> tuple[str, ...]:
+    if raw is None:
+        return ()
+    if isinstance(raw, str):
+        return (raw,) if raw else ()
+    return tuple(str(item) for item in raw if str(item))
+
+
 class TuiDomainRunner:
     def __init__(
         self,
@@ -52,9 +95,11 @@ class TuiDomainRunner:
         codebase_path: str | Path,
         run_id: str | None = None,
         artifacts_base_dir: str | Path = "results/tui",
+        runtime_config: dict[str, Any] | None = None,
         event_callback: EventCallback | None = None,
     ):
         self.engine = engine
+        self.runtime_config = dict(runtime_config or {})
         self.run_id = run_id or utc_now_iso().replace(":", "").replace(".", "-")
         self.artifacts = TuiArtifactStore(
             run_id=self.run_id,
@@ -96,6 +141,8 @@ class TuiDomainRunner:
                     self._run_review_file(command_id, request)
                 elif request.name == "review_patch":
                     self._run_review_patch(command_id, request)
+                elif request.name == "research":
+                    self._run_research(command_id, request)
                 elif request.name == "triage":
                     self._run_triage(command_id, request)
                 elif request.name == "security_report":
@@ -181,6 +228,12 @@ class TuiDomainRunner:
 
     def _run_review_code(self, command_id: str, request: TuiCommandRequest) -> None:
         options = self._review_options(request)
+        if options is not None and options.review_profile == "research":
+            self._run_research(
+                command_id,
+                TuiCommandRequest("research", raw=request.raw or "/review_code"),
+            )
+            return
         files = list(self.engine.review.get_code_files(options=options))
         total = len(files)
         findings = 0
@@ -262,11 +315,142 @@ class TuiDomainRunner:
             payload={"path": str(sarif_path)},
         )
 
-    @staticmethod
-    def _review_options(request: TuiCommandRequest) -> ReviewOptions | None:
-        if request.use_retrieval_context:
+    def _run_research(self, command_id: str, request: TuiCommandRequest) -> None:
+        options = self._research_options(request)
+        self._emit(
+            "research.started",
+            command_id,
+            "Running vulnerability research",
+            payload={
+                "hunters": list(options.hunters),
+                "research_budget": options.research_budget,
+                "emit_killed": options.emit_killed,
+                "emit_unresolved": options.emit_unresolved,
+                "proof_artifacts": options.proof_artifacts,
+                "evidence_policy": options.evidence_policy,
+            },
+        )
+        result = self.engine.research.run(
+            self.artifacts.codebase_path,
+            options=options,
+        )
+        self._emit(
+            "research.hypotheses.verified",
+            command_id,
+            "Research hypotheses verified",
+            payload={
+                "generated": len(result.generated),
+                "proven": len(result.proven),
+                "killed": len(result.killed),
+                "unresolved": len(result.unresolved),
+            },
+        )
+        self._emit(
+            "research.artifacts.written",
+            command_id,
+            f"Research report written to {self.artifacts.paths.research_report}",
+            payload={
+                "report": str(self.artifacts.paths.research_report),
+                "sarif": str(self.artifacts.paths.research_sarif),
+                "hypotheses": str(self.artifacts.paths.research_hypotheses),
+                "evidence": str(self.artifacts.paths.research_evidence),
+                "generated": len(result.generated),
+                "proven": len(result.proven),
+                "killed": len(result.killed),
+                "unresolved": len(result.unresolved),
+            },
+        )
+        self._run_security_report_from_sarif(
+            command_id,
+            self.artifacts.paths.research_sarif,
+            source="research",
+        )
+
+    def _review_options(self, request: TuiCommandRequest) -> ReviewOptions | None:
+        review_mode = _text_default(
+            None,
+            self.runtime_config,
+            "review_mode",
+            default="standard",
+        )
+        review_profile = _text_default(
+            None,
+            self.runtime_config,
+            "review_profile",
+            default="normal",
+        )
+        skip_test_files = _bool_default(
+            None,
+            self.runtime_config,
+            "skip_test_files",
+            default=False,
+        )
+        extra_patterns = _path_patterns_default(
+            self.runtime_config.get("extra_test_path_patterns")
+        )
+        if (
+            request.use_retrieval_context
+            and review_mode == "standard"
+            and review_profile == "normal"
+            and not skip_test_files
+            and not extra_patterns
+        ):
             return None
-        return ReviewOptions(use_retrieval_context=False)
+        return ReviewOptions(
+            use_retrieval_context=request.use_retrieval_context,
+            review_mode=review_mode,
+            review_profile=review_profile,
+            skip_test_files=skip_test_files,
+            extra_test_path_patterns=extra_patterns,
+        )
+
+    def _research_options(self, request: TuiCommandRequest) -> ResearchOptions:
+        parsed = parse_research_command_options(request.args)
+        return ResearchOptions(
+            hunters=parsed.hunters
+            or _parse_runtime_hunters(self.runtime_config.get("research_hunters")),
+            persist=True,
+            rebuild=_bool_default(
+                parsed.rebuild,
+                self.runtime_config,
+                "research_rebuild",
+                default=False,
+            ),
+            research_budget=_text_default(
+                parsed.research_budget,
+                self.runtime_config,
+                "research_budget",
+                default="standard",
+            ),
+            emit_killed=_bool_default(
+                parsed.emit_killed,
+                self.runtime_config,
+                "research_emit_killed",
+                default=False,
+            ),
+            emit_unresolved=_bool_default(
+                parsed.emit_unresolved,
+                self.runtime_config,
+                "research_emit_unresolved",
+                default=False,
+            ),
+            proof_artifacts=_bool_default(
+                parsed.proof_artifacts,
+                self.runtime_config,
+                "research_proof_artifacts",
+                default=False,
+            ),
+            evidence_policy=_text_default(
+                parsed.evidence_policy,
+                self.runtime_config,
+                "research_evidence_policy",
+                default="triage_evidence",
+            ),
+            hypotheses_path=str(self.artifacts.paths.research_hypotheses),
+            evidence_ledger_path=str(self.artifacts.paths.research_evidence),
+            sarif_path=str(self.artifacts.paths.research_sarif),
+            research_report_path=str(self.artifacts.paths.research_report),
+        )
 
     def _run_triage(self, command_id: str, request: TuiCommandRequest) -> None:
         sarif_path, source = self._resolve_triage_input(request)
@@ -334,10 +518,15 @@ class TuiDomainRunner:
 
     def _run_security_report(self, command_id: str, request: TuiCommandRequest) -> None:
         sarif_path, source = self._resolve_security_report_input(request)
+        self._run_security_report_from_sarif(command_id, sarif_path, source=source)
+
+    def _run_security_report_from_sarif(
+        self, command_id: str, sarif_path: Path, *, source: str
+    ) -> None:
         self._emit(
             "security_report.started",
             command_id,
-            f"Reading triage SARIF from {sarif_path}",
+            f"Reading SARIF from {sarif_path}",
             payload={"input": str(sarif_path), "source": source},
         )
         payload = self._read_sarif_payload(sarif_path)
@@ -415,7 +604,7 @@ class TuiDomainRunner:
         self._emit(
             "security_report.llm.started",
             command_id,
-            "Extracting attack chains from triage findings",
+            "Extracting attack chains from SARIF findings",
             payload={
                 "input": str(sarif_path),
                 "findings": len(findings),
@@ -893,7 +1082,7 @@ class TuiDomainRunner:
             "",
             "## Generation Note",
             "",
-            "The configured AI model returned an empty final response, so Metis wrote a deterministic fallback report from the extracted attack-chain notes and triaged SARIF. Re-run `/security_report` after checking provider limits for a richer AI-generated narrative.",
+            "The configured AI model returned an empty final response, so Metis wrote a deterministic fallback report from the extracted attack-chain notes and SARIF. Re-run `/security_report` after checking provider limits for a richer AI-generated narrative.",
             "",
             "## Executive Summary",
             "",

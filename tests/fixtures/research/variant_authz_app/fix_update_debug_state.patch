@@ -1,0 +1,9 @@
+diff --git a/app.py b/app.py
+index 7777777..8888888 100644
+--- a/app.py
++++ b/app.py
+@@ -63,5 +63,7 @@ def update_debug_state(value):
+ def update_debug_state(value):
++    if secure_state_locked():
++        return None
+     return debug_enable(value)

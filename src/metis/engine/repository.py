@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import logging
 import os
+from pathlib import Path
 
 import pathspec
 from llama_index.core.node_parser import SentenceSplitter
@@ -67,6 +68,54 @@ class EngineRepository:
         if isinstance(persist_dir, str) and persist_dir:
             return os.path.join(str(persist_dir), "function_index.json")
         return os.path.join(self._config.codebase_path, ".metis", "function_index.json")
+
+    def get_security_model_path(self) -> str:
+        return self._metis_path("security_model.json")
+
+    def get_security_graph_path(self) -> str:
+        return self._metis_path("security_graph.json")
+
+    def get_research_hypotheses_path(self) -> str:
+        return self._metis_path("research", "hypotheses.jsonl")
+
+    def get_research_evidence_path(self) -> str:
+        return self._metis_path("research", "evidence.jsonl")
+
+    def get_research_sarif_path(self) -> str:
+        return self._metis_path("research", "results.sarif")
+
+    def get_research_report_path(self) -> str:
+        return self._metis_path("research", "report.json")
+
+    def get_research_lessons_path(self) -> str:
+        return self._metis_path("research", "lessons.jsonl")
+
+    def get_research_proofs_dir(self) -> str:
+        return self._metis_path("research", "proofs")
+
+    def _metis_path(self, *parts: str) -> str:
+        base_path = os.path.abspath(self._config.codebase_path)
+        metis_path = os.path.abspath(os.path.join(base_path, ".metis", *parts))
+        if os.path.commonpath([base_path, metis_path]) != base_path:
+            raise ValueError("Metis research path escaped codebase")
+        return metis_path
+
+    def resolve_inside_codebase(
+        self,
+        path: str | os.PathLike[str],
+        *,
+        purpose: str,
+    ) -> Path:
+        base_path = Path(self._config.codebase_path).resolve()
+        resolved = Path(path).resolve()
+        try:
+            resolved.relative_to(base_path)
+        except ValueError as exc:
+            raise ValueError(
+                f"{purpose} must use a path inside the configured codebase path: "
+                f"{base_path}"
+            ) from exc
+        return resolved
 
     def load_function_index(self) -> FunctionIndex | None:
         return load_function_index(self.get_function_index_path())

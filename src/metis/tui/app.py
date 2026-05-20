@@ -727,7 +727,23 @@ class MetisTuiApp(App[None]):
                 str(payload.get("output") or "")
             )
         elif event.type == "security_report.started":
-            self._run_display.phase = "Reading triage SARIF"
+            self._run_display.phase = "Reading SARIF"
+        elif event.type == "research.started":
+            self._run_display.phase = "Running vulnerability research"
+        elif event.type == "research.hypotheses.verified":
+            self._run_display.phase = "Verifying hypotheses"
+            self._run_display.findings = int(
+                payload.get("proven") or self._run_display.findings
+            )
+            self._run_display.total = int(payload.get("generated") or 0) or None
+        elif event.type == "research.artifacts.written":
+            self._run_display.phase = "Research report ready"
+            self._run_display.artifact_path = self._display_path(
+                str(payload.get("report") or "")
+            )
+            self._run_display.findings = int(
+                payload.get("proven") or self._run_display.findings
+            )
         elif event.type == "security_report.findings.extracted":
             self._run_display.phase = "Extracting typed findings"
             self._run_display.findings = int(
@@ -809,6 +825,8 @@ class MetisTuiApp(App[None]):
             return f"Triage SARIF ready: {self._run_display.artifact_path}"
         if event.type == "security_report.written":
             return f"Security report ready: {self._run_display.artifact_path}"
+        if event.type == "research.artifacts.written":
+            return f"Research report ready: {self._run_display.artifact_path}"
         if event.type == "index.scan.started":
             total = self._run_display.total or 0
             return f"Indexing project context: {total} files"
@@ -822,7 +840,15 @@ class MetisTuiApp(App[None]):
 
     def _status_text(self, event: TuiEvent) -> str:
         if self._run_display.command and event.type.startswith(
-            ("review.", "sarif.", "index.", "triage.", "security_report.", "command.")
+            (
+                "review.",
+                "sarif.",
+                "index.",
+                "triage.",
+                "research.",
+                "security_report.",
+                "command.",
+            )
         ):
             return f"{self._run_display.phase} {self._progress_text()}".strip()
         return sanitize_text(event.message)
@@ -874,6 +900,7 @@ class MetisTuiApp(App[None]):
             "review_code": "Reviewing files",
             "review_file": "Reviewing file",
             "review_patch": "Reviewing patch",
+            "research": "Running vulnerability research",
             "triage": "Triaging SARIF",
             "security_report": "Writing security report",
             "init": "Inspecting project",
@@ -928,7 +955,7 @@ class MetisTuiApp(App[None]):
         return text
 
     def _shortcut_text(self) -> str:
-        return "/help   /init   /status   /index   /review_code   /triage   /security_report"
+        return "/help   /init   /status   /index   /review_code   /research   /triage   /security_report"
 
     def _status_strip_text(self, override: str | None = None) -> Text:
         if override is not None and self._active:
@@ -1016,7 +1043,11 @@ class MetisTuiApp(App[None]):
         if state.findings:
             parts.append(f"findings {state.findings}")
         if state.artifact_path:
-            label = "report" if state.command == "/security_report" else "SARIF"
+            label = (
+                "report"
+                if state.command in {"/security_report", "/research"}
+                else "SARIF"
+            )
             parts.append(f"{label} {state.artifact_path}")
         return "  ".join(parts)
 
@@ -1223,7 +1254,7 @@ class MetisTuiApp(App[None]):
                 "METIS_OPENAI_API_KEY",
             )
         )
-        tool_names = "project_tree, list_dir, read_file, file_slice, search_text, find_file, index, review_code, review_file, review_patch, triage, security_report"
+        tool_names = "project_tree, list_dir, read_file, file_slice, search_text, find_file, index, review_code, review_file, review_patch, research, triage, security_report"
         return "\n".join(
             (
                 "Status",
@@ -1315,8 +1346,18 @@ class MetisTuiApp(App[None]):
         return self.startup_state.chat_enabled and self.chat_session is not None
 
 
-def run_tui(engine, args, *, startup_state: TuiStartupState | None = None) -> None:
-    runner = TuiDomainRunner(engine, codebase_path=args.codebase_path)
+def run_tui(
+    engine,
+    args,
+    *,
+    startup_state: TuiStartupState | None = None,
+    runtime: dict | None = None,
+) -> None:
+    runner = TuiDomainRunner(
+        engine,
+        codebase_path=args.codebase_path,
+        runtime_config=runtime,
+    )
     if startup_state is None:
         startup_state = TuiStartupState.ready(engine, {})
     MetisTuiApp(runner, startup_state=startup_state).run()

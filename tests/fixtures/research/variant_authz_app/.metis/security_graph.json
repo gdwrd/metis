@@ -1,0 +1,776 @@
+{
+  "analysis_root": "/Users/nazshe01/dev/metis/tests/fixtures/research/variant_authz_app",
+  "edges": [
+    {
+      "kind": "call",
+      "metadata": {},
+      "source": "function:variant_authz_app/app.py::get_project",
+      "target": "function:variant_authz_app/app.py::load_project"
+    },
+    {
+      "kind": "call",
+      "metadata": {},
+      "source": "function:variant_authz_app/app.py::get_project",
+      "target": "function:variant_authz_app/app.py::route"
+    },
+    {
+      "kind": "call",
+      "metadata": {},
+      "source": "function:variant_authz_app/app.py::status",
+      "target": "function:variant_authz_app/app.py::route"
+    },
+    {
+      "kind": "call",
+      "metadata": {},
+      "source": "function:variant_authz_app/app.py::store_project_name",
+      "target": "function:variant_authz_app/app.py::sanitize_name"
+    },
+    {
+      "kind": "call",
+      "metadata": {},
+      "source": "function:variant_authz_app/app.py::update_debug_shadow",
+      "target": "function:variant_authz_app/app.py::debug_enable"
+    },
+    {
+      "kind": "call",
+      "metadata": {},
+      "source": "function:variant_authz_app/app.py::update_debug_state",
+      "target": "function:variant_authz_app/app.py::debug_enable"
+    },
+    {
+      "kind": "call",
+      "metadata": {},
+      "source": "function:variant_authz_app/app.py::update_debug_state",
+      "target": "function:variant_authz_app/app.py::secure_state_locked"
+    },
+    {
+      "kind": "call",
+      "metadata": {},
+      "source": "function:variant_authz_app/app.py::update_project_settings",
+      "target": "function:variant_authz_app/app.py::route"
+    },
+    {
+      "kind": "framework_registration",
+      "metadata": {
+        "framework": "route"
+      },
+      "source": "route:variant_authz_app/app.py:18:/projects/<project_id>",
+      "target": "function:variant_authz_app/app.py::get_project"
+    },
+    {
+      "kind": "framework_registration",
+      "metadata": {
+        "framework": "route"
+      },
+      "source": "route:variant_authz_app/app.py:23:/projects/<project_id>/settings",
+      "target": "function:variant_authz_app/app.py::update_project_settings"
+    },
+    {
+      "kind": "framework_registration",
+      "metadata": {
+        "framework": "route"
+      },
+      "source": "route:variant_authz_app/app.py:28:/status",
+      "target": "function:variant_authz_app/app.py::status"
+    }
+  ],
+  "file_hashes": {
+    "variant_authz_app/app.py": "860a6463465f0943c544230e854ef0906f284aa89f439bc61adce5c62b1ea837"
+  },
+  "generated_at": "2026-05-20T11:31:48Z",
+  "metadata": {
+    "root": "/Users/nazshe01/dev/metis/tests/fixtures/research/variant_authz_app",
+    "source": "function_index+python_ast"
+  },
+  "nodes": [
+    {
+      "end_line": 60,
+      "file": "variant_authz_app/app.py",
+      "id": "function:variant_authz_app/app.py::debug_enable",
+      "language": "python",
+      "line": 59,
+      "metadata": {
+        "call_names": [],
+        "config_refs": [],
+        "decorators": [],
+        "guards": [],
+        "imports": [],
+        "route_decorator": null,
+        "route_group": null,
+        "route_path": null
+      },
+      "parameters": [
+        "value"
+      ],
+      "returns": [
+        "value"
+      ],
+      "signature": null,
+      "symbol": "debug_enable",
+      "tags": [
+        {
+          "confidence": 0.7,
+          "detail": "heuristic sink marker",
+          "file": "variant_authz_app/app.py",
+          "kind": "sink",
+          "line": 59,
+          "symbol": "debug_enable",
+          "value": "debug_enable"
+        }
+      ],
+      "type": "function"
+    },
+    {
+      "end_line": 3,
+      "file": "variant_authz_app/app.py",
+      "id": "function:variant_authz_app/app.py::decorator",
+      "language": "python",
+      "line": 2,
+      "metadata": {
+        "call_names": [],
+        "config_refs": [],
+        "decorators": [],
+        "guards": [],
+        "imports": [],
+        "route_decorator": null,
+        "route_group": null,
+        "route_path": null
+      },
+      "parameters": [
+        "func"
+      ],
+      "returns": [
+        "value"
+      ],
+      "signature": null,
+      "symbol": "decorator",
+      "tags": [],
+      "type": "function"
+    },
+    {
+      "end_line": 19,
+      "file": "variant_authz_app/app.py",
+      "id": "function:variant_authz_app/app.py::get_project",
+      "language": "python",
+      "line": 18,
+      "metadata": {
+        "call_names": [
+          "load_project",
+          "route"
+        ],
+        "config_refs": [],
+        "decorators": [
+          "route",
+          "require_project_member"
+        ],
+        "guards": [
+          "require_project_member"
+        ],
+        "imports": [],
+        "route_decorator": "route",
+        "route_group": "projects",
+        "route_path": "/projects/<project_id>"
+      },
+      "parameters": [
+        "project_id"
+      ],
+      "returns": [
+        "value"
+      ],
+      "signature": null,
+      "symbol": "get_project",
+      "tags": [
+        {
+          "confidence": 1.0,
+          "detail": "HTTP route handler",
+          "file": "variant_authz_app/app.py",
+          "kind": "entrypoint",
+          "line": 18,
+          "symbol": "get_project",
+          "value": "/projects/<project_id>"
+        },
+        {
+          "confidence": 1.0,
+          "detail": "route",
+          "file": "variant_authz_app/app.py",
+          "kind": "framework",
+          "line": 18,
+          "symbol": "get_project",
+          "value": "route"
+        },
+        {
+          "confidence": 0.8,
+          "detail": "heuristic guard marker",
+          "file": "variant_authz_app/app.py",
+          "kind": "guard",
+          "line": 18,
+          "symbol": "get_project",
+          "value": "require_project_member"
+        }
+      ],
+      "type": "function"
+    },
+    {
+      "end_line": 13,
+      "file": "variant_authz_app/app.py",
+      "id": "function:variant_authz_app/app.py::load_project",
+      "language": "python",
+      "line": 12,
+      "metadata": {
+        "call_names": [],
+        "config_refs": [],
+        "decorators": [],
+        "guards": [],
+        "imports": [],
+        "route_decorator": null,
+        "route_group": null,
+        "route_path": null
+      },
+      "parameters": [
+        "project_id"
+      ],
+      "returns": [
+        "value"
+      ],
+      "signature": null,
+      "symbol": "load_project",
+      "tags": [],
+      "type": "function"
+    },
+    {
+      "end_line": 9,
+      "file": "variant_authz_app/app.py",
+      "id": "function:variant_authz_app/app.py::require_project_member",
+      "language": "python",
+      "line": 8,
+      "metadata": {
+        "call_names": [],
+        "config_refs": [],
+        "decorators": [],
+        "guards": [],
+        "imports": [],
+        "route_decorator": null,
+        "route_group": null,
+        "route_path": null
+      },
+      "parameters": [
+        "func"
+      ],
+      "returns": [
+        "value"
+      ],
+      "signature": null,
+      "symbol": "require_project_member",
+      "tags": [
+        {
+          "confidence": 0.8,
+          "detail": "heuristic guard marker",
+          "file": "variant_authz_app/app.py",
+          "kind": "guard",
+          "line": 8,
+          "symbol": "require_project_member",
+          "value": "require_project_member"
+        }
+      ],
+      "type": "function"
+    },
+    {
+      "end_line": 5,
+      "file": "variant_authz_app/app.py",
+      "id": "function:variant_authz_app/app.py::route",
+      "language": "python",
+      "line": 1,
+      "metadata": {
+        "call_names": [],
+        "config_refs": [],
+        "decorators": [],
+        "guards": [],
+        "imports": [],
+        "route_decorator": null,
+        "route_group": null,
+        "route_path": null
+      },
+      "parameters": [
+        "path"
+      ],
+      "returns": [
+        "value"
+      ],
+      "signature": null,
+      "symbol": "route",
+      "tags": [],
+      "type": "function"
+    },
+    {
+      "end_line": 33,
+      "file": "variant_authz_app/app.py",
+      "id": "function:variant_authz_app/app.py::sanitize_name",
+      "language": "python",
+      "line": 32,
+      "metadata": {
+        "call_names": [
+          "strip",
+          "value.strip"
+        ],
+        "config_refs": [],
+        "decorators": [],
+        "guards": [],
+        "imports": [],
+        "route_decorator": null,
+        "route_group": null,
+        "route_path": null
+      },
+      "parameters": [
+        "value"
+      ],
+      "returns": [
+        "value"
+      ],
+      "signature": null,
+      "symbol": "sanitize_name",
+      "tags": [
+        {
+          "confidence": 0.7,
+          "detail": "heuristic sanitizer marker",
+          "file": "variant_authz_app/app.py",
+          "kind": "sanitizer",
+          "line": 32,
+          "symbol": "sanitize_name",
+          "value": "sanitize_name"
+        }
+      ],
+      "type": "function"
+    },
+    {
+      "end_line": 56,
+      "file": "variant_authz_app/app.py",
+      "id": "function:variant_authz_app/app.py::secure_state_locked",
+      "language": "python",
+      "line": 55,
+      "metadata": {
+        "call_names": [],
+        "config_refs": [],
+        "decorators": [],
+        "guards": [],
+        "imports": [],
+        "route_decorator": null,
+        "route_group": null,
+        "route_path": null
+      },
+      "parameters": [],
+      "returns": [
+        "value"
+      ],
+      "signature": null,
+      "symbol": "secure_state_locked",
+      "tags": [
+        {
+          "confidence": 0.8,
+          "detail": "heuristic guard marker",
+          "file": "variant_authz_app/app.py",
+          "kind": "guard",
+          "line": 55,
+          "symbol": "secure_state_locked",
+          "value": "secure_state_locked"
+        }
+      ],
+      "type": "function"
+    },
+    {
+      "end_line": 52,
+      "file": "variant_authz_app/app.py",
+      "id": "function:variant_authz_app/app.py::set_quota_default",
+      "language": "python",
+      "line": 51,
+      "metadata": {
+        "call_names": [],
+        "config_refs": [],
+        "decorators": [],
+        "guards": [],
+        "imports": [],
+        "route_decorator": null,
+        "route_group": null,
+        "route_path": null
+      },
+      "parameters": [
+        "quota"
+      ],
+      "returns": [
+        "value"
+      ],
+      "signature": null,
+      "symbol": "set_quota_default",
+      "tags": [],
+      "type": "function"
+    },
+    {
+      "end_line": 48,
+      "file": "variant_authz_app/app.py",
+      "id": "function:variant_authz_app/app.py::set_quota_limit",
+      "language": "python",
+      "line": 45,
+      "metadata": {
+        "call_names": [
+          "len"
+        ],
+        "config_refs": [],
+        "decorators": [],
+        "guards": [],
+        "imports": [],
+        "route_decorator": null,
+        "route_group": null,
+        "route_path": null
+      },
+      "parameters": [
+        "limit"
+      ],
+      "returns": [
+        "value"
+      ],
+      "signature": null,
+      "symbol": "set_quota_limit",
+      "tags": [],
+      "type": "function"
+    },
+    {
+      "end_line": 29,
+      "file": "variant_authz_app/app.py",
+      "id": "function:variant_authz_app/app.py::status",
+      "language": "python",
+      "line": 28,
+      "metadata": {
+        "call_names": [
+          "route"
+        ],
+        "config_refs": [],
+        "decorators": [
+          "route"
+        ],
+        "guards": [],
+        "imports": [],
+        "route_decorator": "route",
+        "route_group": "status",
+        "route_path": "/status"
+      },
+      "parameters": [],
+      "returns": [
+        "value"
+      ],
+      "signature": null,
+      "symbol": "status",
+      "tags": [
+        {
+          "confidence": 1.0,
+          "detail": "HTTP route handler",
+          "file": "variant_authz_app/app.py",
+          "kind": "entrypoint",
+          "line": 28,
+          "symbol": "status",
+          "value": "/status"
+        },
+        {
+          "confidence": 1.0,
+          "detail": "route",
+          "file": "variant_authz_app/app.py",
+          "kind": "framework",
+          "line": 28,
+          "symbol": "status",
+          "value": "route"
+        }
+      ],
+      "type": "function"
+    },
+    {
+      "end_line": 42,
+      "file": "variant_authz_app/app.py",
+      "id": "function:variant_authz_app/app.py::store_project_description",
+      "language": "python",
+      "line": 41,
+      "metadata": {
+        "call_names": [],
+        "config_refs": [],
+        "decorators": [],
+        "guards": [],
+        "imports": [],
+        "route_decorator": null,
+        "route_group": null,
+        "route_path": null
+      },
+      "parameters": [
+        "description"
+      ],
+      "returns": [
+        "value"
+      ],
+      "signature": null,
+      "symbol": "store_project_description",
+      "tags": [],
+      "type": "function"
+    },
+    {
+      "end_line": 38,
+      "file": "variant_authz_app/app.py",
+      "id": "function:variant_authz_app/app.py::store_project_name",
+      "language": "python",
+      "line": 36,
+      "metadata": {
+        "call_names": [
+          "sanitize_name"
+        ],
+        "config_refs": [],
+        "decorators": [],
+        "guards": [],
+        "imports": [],
+        "route_decorator": null,
+        "route_group": null,
+        "route_path": null
+      },
+      "parameters": [
+        "name"
+      ],
+      "returns": [
+        "value"
+      ],
+      "signature": null,
+      "symbol": "store_project_name",
+      "tags": [
+        {
+          "confidence": 0.7,
+          "detail": "heuristic sanitizer marker",
+          "file": "variant_authz_app/app.py",
+          "kind": "sanitizer",
+          "line": 36,
+          "symbol": "store_project_name",
+          "value": "sanitize_name"
+        }
+      ],
+      "type": "function"
+    },
+    {
+      "end_line": 70,
+      "file": "variant_authz_app/app.py",
+      "id": "function:variant_authz_app/app.py::update_debug_shadow",
+      "language": "python",
+      "line": 69,
+      "metadata": {
+        "call_names": [
+          "debug_enable"
+        ],
+        "config_refs": [],
+        "decorators": [],
+        "guards": [],
+        "imports": [],
+        "route_decorator": null,
+        "route_group": null,
+        "route_path": null
+      },
+      "parameters": [
+        "value"
+      ],
+      "returns": [
+        "value"
+      ],
+      "signature": null,
+      "symbol": "update_debug_shadow",
+      "tags": [
+        {
+          "confidence": 0.7,
+          "detail": "heuristic sink marker",
+          "file": "variant_authz_app/app.py",
+          "kind": "sink",
+          "line": 69,
+          "symbol": "update_debug_shadow",
+          "value": "debug_enable"
+        }
+      ],
+      "type": "function"
+    },
+    {
+      "end_line": 66,
+      "file": "variant_authz_app/app.py",
+      "id": "function:variant_authz_app/app.py::update_debug_state",
+      "language": "python",
+      "line": 63,
+      "metadata": {
+        "call_names": [
+          "debug_enable",
+          "secure_state_locked"
+        ],
+        "config_refs": [],
+        "decorators": [],
+        "guards": [
+          "secure_state_locked"
+        ],
+        "imports": [],
+        "route_decorator": null,
+        "route_group": null,
+        "route_path": null
+      },
+      "parameters": [
+        "value"
+      ],
+      "returns": [
+        "value"
+      ],
+      "signature": null,
+      "symbol": "update_debug_state",
+      "tags": [
+        {
+          "confidence": 0.7,
+          "detail": "heuristic sink marker",
+          "file": "variant_authz_app/app.py",
+          "kind": "sink",
+          "line": 63,
+          "symbol": "update_debug_state",
+          "value": "debug_enable"
+        },
+        {
+          "confidence": 0.8,
+          "detail": "heuristic guard marker",
+          "file": "variant_authz_app/app.py",
+          "kind": "guard",
+          "line": 63,
+          "symbol": "update_debug_state",
+          "value": "secure_state_locked"
+        }
+      ],
+      "type": "function"
+    },
+    {
+      "end_line": 24,
+      "file": "variant_authz_app/app.py",
+      "id": "function:variant_authz_app/app.py::update_project_settings",
+      "language": "python",
+      "line": 23,
+      "metadata": {
+        "call_names": [
+          "route"
+        ],
+        "config_refs": [],
+        "decorators": [
+          "route"
+        ],
+        "guards": [],
+        "imports": [],
+        "route_decorator": "route",
+        "route_group": "projects",
+        "route_path": "/projects/<project_id>/settings"
+      },
+      "parameters": [
+        "project_id"
+      ],
+      "returns": [
+        "value"
+      ],
+      "signature": null,
+      "symbol": "update_project_settings",
+      "tags": [
+        {
+          "confidence": 1.0,
+          "detail": "HTTP route handler",
+          "file": "variant_authz_app/app.py",
+          "kind": "entrypoint",
+          "line": 23,
+          "symbol": "update_project_settings",
+          "value": "/projects/<project_id>/settings"
+        },
+        {
+          "confidence": 1.0,
+          "detail": "route",
+          "file": "variant_authz_app/app.py",
+          "kind": "framework",
+          "line": 23,
+          "symbol": "update_project_settings",
+          "value": "route"
+        }
+      ],
+      "type": "function"
+    },
+    {
+      "end_line": null,
+      "file": "variant_authz_app/app.py",
+      "id": "route:variant_authz_app/app.py:18:/projects/<project_id>",
+      "language": null,
+      "line": 18,
+      "metadata": {
+        "decorator": "route",
+        "route_group": "projects",
+        "route_path": "/projects/<project_id>"
+      },
+      "parameters": [],
+      "returns": [],
+      "signature": null,
+      "symbol": "get_project",
+      "tags": [
+        {
+          "confidence": 1.0,
+          "detail": "HTTP route registration",
+          "file": "variant_authz_app/app.py",
+          "kind": "entrypoint",
+          "line": 18,
+          "symbol": "get_project",
+          "value": "/projects/<project_id>"
+        }
+      ],
+      "type": "route"
+    },
+    {
+      "end_line": null,
+      "file": "variant_authz_app/app.py",
+      "id": "route:variant_authz_app/app.py:23:/projects/<project_id>/settings",
+      "language": null,
+      "line": 23,
+      "metadata": {
+        "decorator": "route",
+        "route_group": "projects",
+        "route_path": "/projects/<project_id>/settings"
+      },
+      "parameters": [],
+      "returns": [],
+      "signature": null,
+      "symbol": "update_project_settings",
+      "tags": [
+        {
+          "confidence": 1.0,
+          "detail": "HTTP route registration",
+          "file": "variant_authz_app/app.py",
+          "kind": "entrypoint",
+          "line": 23,
+          "symbol": "update_project_settings",
+          "value": "/projects/<project_id>/settings"
+        }
+      ],
+      "type": "route"
+    },
+    {
+      "end_line": null,
+      "file": "variant_authz_app/app.py",
+      "id": "route:variant_authz_app/app.py:28:/status",
+      "language": null,
+      "line": 28,
+      "metadata": {
+        "decorator": "route",
+        "route_group": "status",
+        "route_path": "/status"
+      },
+      "parameters": [],
+      "returns": [],
+      "signature": null,
+      "symbol": "status",
+      "tags": [
+        {
+          "confidence": 1.0,
+          "detail": "HTTP route registration",
+          "file": "variant_authz_app/app.py",
+          "kind": "entrypoint",
+          "line": 28,
+          "symbol": "status",
+          "value": "/status"
+        }
+      ],
+      "type": "route"
+    }
+  ],
+  "project_root_hash": "4b6ba07975c8e27b676f040e20ab93d5e449d1430a0c88c065cc04fffc8913ad",
+  "schema_version": "1"
+}

@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Callable, Literal
 
 from .sanitize import sanitize_text
@@ -99,6 +99,7 @@ class TuiBootstrapSession:
     engine: Any | None
     vector_backend: Any | None
     startup_state: TuiStartupState
+    runtime: dict[str, Any] = field(default_factory=dict)
 
 
 def _hint_for_stage(stage: str, message: str) -> str:
@@ -126,6 +127,7 @@ def bootstrap_tui_session(
             engine=None,
             vector_backend=None,
             startup_state=TuiStartupState.failed(stage="config", error=exc),
+            runtime={},
         )
     try:
         engine, vector_backend = build_engine(args, runtime)
@@ -136,9 +138,11 @@ def bootstrap_tui_session(
             startup_state=TuiStartupState.failed(
                 stage="engine", error=exc, runtime=runtime
             ),
+            runtime=dict(runtime),
         )
     return TuiBootstrapSession(
         engine=engine,
         vector_backend=vector_backend,
         startup_state=TuiStartupState.ready(engine, runtime),
+        runtime=dict(runtime),
     )

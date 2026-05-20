@@ -1,0 +1,8 @@
+diff --git a/app.py b/app.py
+index 3333333..4444444 100644
+--- a/app.py
++++ b/app.py
+@@ -36,5 +36,6 @@ def store_project_name(name):
+ def store_project_name(name):
++    name = sanitize_name(name)
+     return name

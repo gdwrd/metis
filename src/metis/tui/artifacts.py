@@ -18,6 +18,10 @@ class TuiArtifactPaths:
     commands_dir: Path
     review_sarif: Path
     triage_sarif: Path
+    research_sarif: Path
+    research_report: Path
+    research_hypotheses: Path
+    research_evidence: Path
     security_report: Path
     security_report_findings: Path
     security_report_candidates: Path
@@ -43,6 +47,10 @@ class TuiArtifactStore:
             commands_dir=run_dir / "commands",
             review_sarif=run_dir / "review.sarif",
             triage_sarif=run_dir / "triage.sarif",
+            research_sarif=run_dir / "research.sarif",
+            research_report=run_dir / "research-report.json",
+            research_hypotheses=run_dir / "research-hypotheses.jsonl",
+            research_evidence=run_dir / "research-evidence.jsonl",
             security_report=run_dir / "security-report.md",
             security_report_findings=run_dir / "security-report-findings.json",
             security_report_candidates=run_dir / "security-report-candidates.json",
@@ -63,6 +71,10 @@ class TuiArtifactStore:
             "artifacts": {
                 "review_sarif": str(self.paths.review_sarif),
                 "triage_sarif": str(self.paths.triage_sarif),
+                "research_sarif": str(self.paths.research_sarif),
+                "research_report": str(self.paths.research_report),
+                "research_hypotheses": str(self.paths.research_hypotheses),
+                "research_evidence": str(self.paths.research_evidence),
                 "security_report": str(self.paths.security_report),
                 "security_report_findings": str(self.paths.security_report_findings),
                 "security_report_candidates": str(

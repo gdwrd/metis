@@ -45,6 +45,53 @@ def test_parse_slash_command_accepts_security_report_with_optional_path():
     assert request.args == ("results/triage.sarif",)
 
 
+def test_parse_slash_command_accepts_research_hunters():
+    request = parse_slash_command("/research --hunters authz_outlier,ssrf")
+
+    assert request.name == "research"
+    assert request.args == ("--hunters", "authz_outlier,ssrf")
+
+
+def test_parse_slash_command_accepts_research_runtime_overrides():
+    request = parse_slash_command(
+        "/research --research-budget tiny --emit-killed --emit-unresolved "
+        "--proof-artifacts --evidence-policy triage_evidence --rebuild"
+    )
+
+    assert request.name == "research"
+    assert request.args == (
+        "--research-budget",
+        "tiny",
+        "--emit-killed",
+        "--emit-unresolved",
+        "--proof-artifacts",
+        "--evidence-policy",
+        "triage_evidence",
+        "--rebuild",
+    )
+
+
+def test_parse_slash_command_rejects_research_options_without_values():
+    with pytest.raises(ValueError, match="--research-budget requires a value"):
+        parse_slash_command("/research --research-budget")
+
+
+@pytest.mark.parametrize(
+    "command,option",
+    (
+        ("/research --hunters --rebuild", "--hunters"),
+        ("/research --research-budget --emit-killed", "--research-budget"),
+        ("/research --evidence-policy --proof-artifacts", "--evidence-policy"),
+    ),
+)
+def test_parse_slash_command_rejects_research_option_tokens_as_values(
+    command,
+    option,
+):
+    with pytest.raises(ValueError, match=f"{option} requires a value"):
+        parse_slash_command(command)
+
+
 def test_command_completion_items_filter_slash_commands_and_preserve_path_space():
     matches = command_completion_items("/review_f")
 

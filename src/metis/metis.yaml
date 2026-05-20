@@ -39,6 +39,22 @@ review:
     max_extra_tokens: 8000
     wallclock_seconds: 60
 
+research:
+  hunters:
+    - "authz_outlier"
+    - "sql_injection"
+    - "injection_path"
+    - "path_traversal"
+    - "ssrf"
+    - "deserialization"
+    - "memory_lifetime"
+    - "hardware_security"
+  budget: standard
+  emit_killed: false
+  emit_unresolved: false
+  proof_artifacts: false
+  evidence_policy: triage_evidence
+
 llm_provider:
   name: "openai"
   model: "gpt-5.5"

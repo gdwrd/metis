@@ -18,6 +18,7 @@ from .indexing_service import IndexingService
 from .options import TriageOptions, coerce_triage_options
 from .repository import EngineRepository
 from .retrieval_cache import CachedRetriever, RetrievalCache
+from .research import ResearchService
 from .review_service import ReviewService
 from .runtime import EngineConfig, EngineState
 from .triage_constants import DEFAULT_TRIAGE_SIMILARITY_TOP_K
@@ -176,6 +177,7 @@ class MetisEngine:
         )
         self._state = EngineState()
         self.repository = EngineRepository(self._config, self._state)
+        self.research = ResearchService(self.repository)
         self.indexing = IndexingService(
             self._config,
             self._state,
@@ -499,6 +501,7 @@ class MetisEngine:
 
     def close(self):
         self.reset_query_engines()
+        self.research.shutdown()
         self._triage_service.close()
         close_fn = getattr(self.vector_backend, "close", None)
         if callable(close_fn):

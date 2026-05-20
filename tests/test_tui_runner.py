@@ -9,6 +9,7 @@ import pytest
 
 from metis.tui.commands import TuiCommandRequest
 from metis.tui.runner import TuiDomainRunner
+from metis.engine.research import ResearchRunResult
 
 
 class _IndexingDomain:
@@ -122,6 +123,7 @@ class _FakeEngine:
     def __init__(self):
         self.indexing = _IndexingDomain()
         self.review = _ReviewDomain()
+        self.research = _ResearchDomain()
         self.llm_provider = _FakeProvider()
         self.triage_calls = []
 
@@ -138,6 +140,29 @@ class _FakeEngine:
         with open(output_path, "w", encoding="utf-8") as dst:
             json.dump(payload, dst)
         return output_path
+
+
+class _ResearchDomain:
+    def __init__(self):
+        self.calls = []
+
+    def run(self, root, *, options):
+        self.calls.append((root, options))
+        for path in (
+            options.hypotheses_path,
+            options.evidence_ledger_path,
+            options.sarif_path,
+            options.research_report_path,
+        ):
+            if path:
+                with open(path, "w", encoding="utf-8") as handle:
+                    handle.write("{}\n")
+        return ResearchRunResult(
+            hypotheses_path=options.hypotheses_path,
+            evidence_ledger_path=options.evidence_ledger_path,
+            sarif_path=options.sarif_path,
+            research_report_path=options.research_report_path,
+        )
 
 
 class _FakeReportModel:
@@ -208,6 +233,130 @@ def test_runner_review_code_writes_default_review_sarif_and_triage_uses_it(tmp_p
     assert engine.triage_calls[0][0] == str(runner.artifacts.paths.review_sarif)
     assert engine.triage_calls[0][1] == str(runner.artifacts.paths.triage_sarif)
     assert any(event.type == "review.result.recorded" for event in events)
+
+
+def test_runner_research_uses_runtime_defaults(tmp_path):
+    events = []
+    engine = _FakeEngine()
+    runner = TuiDomainRunner(
+        engine,
+        codebase_path=tmp_path,
+        run_id="run-research",
+        artifacts_base_dir=tmp_path / "tui",
+        runtime_config={
+            "research_hunters": "ssrf",
+            "research_budget": "quick",
+            "research_emit_killed": True,
+            "research_emit_unresolved": True,
+            "research_proof_artifacts": True,
+            "research_evidence_policy": "triage_evidence",
+        },
+        event_callback=events.append,
+    )
+
+    runner.execute(
+        TuiCommandRequest(
+            "research",
+            raw="/research",
+        )
+    )
+
+    root, options = engine.research.calls[0]
+    assert root == str(tmp_path)
+    assert options.hunters == ("ssrf",)
+    assert options.persist is True
+    assert options.research_budget == "quick"
+    assert options.emit_killed is True
+    assert options.emit_unresolved is True
+    assert options.proof_artifacts is True
+    assert options.evidence_policy == "triage_evidence"
+    assert runner.artifacts.paths.research_report.is_file()
+    assert runner.artifacts.paths.research_sarif.is_file()
+    assert runner.artifacts.paths.research_hypotheses.is_file()
+    assert runner.artifacts.paths.research_evidence.is_file()
+    assert runner.artifacts.paths.security_report.is_file()
+    assert any(event.type == "research.artifacts.written" for event in events)
+    assert any(event.type == "security_report.written" for event in events)
+
+
+def test_runner_research_respects_explicit_hunters(tmp_path):
+    engine = _FakeEngine()
+    runner = TuiDomainRunner(
+        engine,
+        codebase_path=tmp_path,
+        run_id="run-research",
+        artifacts_base_dir=tmp_path / "tui",
+        runtime_config={
+            "research_hunters": "ssrf",
+            "research_budget": "quick",
+            "research_emit_killed": True,
+            "research_emit_unresolved": False,
+            "research_proof_artifacts": True,
+            "research_evidence_policy": "triage_evidence",
+        },
+    )
+
+    runner.execute(
+        TuiCommandRequest(
+            "research",
+            args=(
+                "--hunters",
+                "authz_outlier,ssrf",
+                "--research-budget",
+                "tiny",
+                "--no-emit-killed",
+                "--emit-unresolved",
+                "--no-proof-artifacts",
+                "--evidence-policy",
+                "strict",
+                "--rebuild",
+            ),
+            raw=(
+                "/research --hunters authz_outlier,ssrf "
+                "--research-budget tiny --no-emit-killed --emit-unresolved "
+                "--no-proof-artifacts --evidence-policy strict --rebuild"
+            ),
+        )
+    )
+
+    root, options = engine.research.calls[0]
+    assert root == str(tmp_path)
+    assert options.hunters == ("authz_outlier", "ssrf")
+    assert options.persist is True
+    assert options.rebuild is True
+    assert options.research_budget == "tiny"
+    assert options.emit_killed is False
+    assert options.emit_unresolved is True
+    assert options.proof_artifacts is False
+    assert options.evidence_policy == "strict"
+
+
+def test_runner_review_code_uses_research_profile_runtime(tmp_path):
+    events = []
+    engine = _FakeEngine()
+    runner = TuiDomainRunner(
+        engine,
+        codebase_path=tmp_path,
+        run_id="run-review-research",
+        artifacts_base_dir=tmp_path / "tui",
+        runtime_config={
+            "review_profile": "research",
+            "research_hunters": "ssrf",
+            "research_budget": "quick",
+        },
+        event_callback=events.append,
+    )
+
+    runner.execute(TuiCommandRequest("review_code", raw="/review_code"))
+
+    assert engine.review.calls == []
+    root, options = engine.research.calls[0]
+    assert root == str(tmp_path)
+    assert options.hunters == ("ssrf",)
+    assert options.research_budget == "quick"
+    assert runner.artifacts.paths.research_report.is_file()
+    assert any(event.type == "research.started" for event in events)
+    assert any(event.type == "security_report.written" for event in events)
 
 
 def test_runner_review_code_does_not_duplicate_service_skipped_event(tmp_path):

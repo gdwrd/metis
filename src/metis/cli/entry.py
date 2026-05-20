@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import argparse
+import copy
 from datetime import datetime
 import logging
 from pathlib import Path
@@ -14,6 +15,7 @@ from prompt_toolkit.history import InMemoryHistory
 from metis.configuration import load_runtime_config
 from metis.bench import BenchmarkRegressionError
 from metis.engine import MetisEngine
+from metis.engine.research import DEFAULT_RESEARCH_HUNTERS
 from metis.usage import UsageRuntime
 from metis.utils import read_file_content
 from metis.providers.registry import get_provider
@@ -40,6 +42,7 @@ logging.captureWarnings(True)
 logging.getLogger().setLevel(logging.ERROR)
 logger = logging.getLogger("metis")
 EXIT_REQUESTED = object()
+DEFAULT_RESEARCH_HUNTERS_TEXT = ",".join(DEFAULT_RESEARCH_HUNTERS)
 
 
 def determine_output_file(cmd, args, cmd_args):
@@ -188,12 +191,14 @@ def _prepare_command_runtime(cmd, cmd_args, args):
     filtered_args, ignore_index = _command_requests_ignore_index(args, cmd_args)
     if not spec.validate_options(cmd, args, ignore_index_requested=ignore_index):
         return None
+    runtime_config = dict(getattr(args, "_runtime_config", {}) or {})
 
     if spec.index_policy == "none":
         return CommandRuntime(
             command=cmd,
             command_args=filtered_args,
             use_retrieval_context=False,
+            config=runtime_config,
         )
 
     if ignore_index and spec.index_policy == "optional":
@@ -201,12 +206,14 @@ def _prepare_command_runtime(cmd, cmd_args, args):
             command=cmd,
             command_args=filtered_args,
             use_retrieval_context=False,
+            config=runtime_config,
         )
 
     return CommandRuntime(
         command=cmd,
         command_args=filtered_args,
         use_retrieval_context=True,
+        config=runtime_config,
     )
 
 
@@ -235,6 +242,12 @@ def execute_command(engine, cmd, cmd_args, args):
 
     if not spec.validate(cmd, runtime.command_args, args):
         return
+    invoke_args = args
+    if cmd == "review_code":
+        invoke_args, runtime.command_args = _review_code_args_with_inline_options(
+            args,
+            runtime.command_args,
+        )
 
     usage_command = None
     if spec.tracked:
@@ -245,11 +258,11 @@ def execute_command(engine, cmd, cmd_args, args):
         )
 
     if usage_command is None:
-        spec.invoke(engine, runtime.command_args, args, runtime)
+        spec.invoke(engine, runtime.command_args, invoke_args, runtime)
         return
 
     with usage_command as command:
-        spec.invoke(engine, runtime.command_args, args, runtime)
+        spec.invoke(engine, runtime.command_args, invoke_args, runtime)
 
     record = engine.finalize_usage_command(command)
     print_usage_summary(
@@ -260,15 +273,48 @@ def execute_command(engine, cmd, cmd_args, args):
     )
 
 
+def _review_code_args_with_inline_options(args, cmd_args):
+    if not cmd_args:
+        return args, cmd_args
+    parser = argparse.ArgumentParser(prog="review_code", add_help=False)
+    parser.add_argument("--review-profile", choices=["normal", "research"])
+    parser.add_argument("--hunters")
+    parser.add_argument("--research-budget")
+    parser.add_argument("--proof-artifacts", action="store_true", default=None)
+    parser.add_argument("--evidence-policy")
+    inline_args, remaining = parser.parse_known_args(cmd_args)
+    if inline_args == argparse.Namespace(
+        review_profile=None,
+        hunters=None,
+        research_budget=None,
+        proof_artifacts=None,
+        evidence_policy=None,
+    ):
+        return args, remaining
+    command_args = copy.copy(args)
+    for name in (
+        "review_profile",
+        "hunters",
+        "research_budget",
+        "proof_artifacts",
+        "evidence_policy",
+    ):
+        value = getattr(inline_args, name)
+        if value is not None:
+            setattr(command_args, name, value)
+    return command_args, remaining
+
+
 def run_non_interactive(engine, args):
-    args.quiet = not args.verbose
     if not args.command:
+        args.quiet = not args.verbose
         print_console(
             "[red]Error:[/red] --command is required in non-interactive mode.",
             args.quiet,
         )
         return 1, None
     parts = shlex.split(args.command.strip())
+    args.quiet = False if _command_requests_help(parts[1:]) else not args.verbose
     cmd, cmd_args = parts[0], parts[1:]
     try:
         result = execute_command(engine, cmd, cmd_args, args)
@@ -282,6 +328,41 @@ def run_non_interactive(engine, args):
         return 1, None
     farewell = "[magenta]Goodbye![/magenta]" if result is EXIT_REQUESTED else None
     return 0, farewell
+
+
+def _command_requests_help(parts: list[str]) -> bool:
+    return any(part in {"-h", "--help"} for part in parts)
+
+
+def _apply_research_runtime_defaults(args, runtime):
+    if args.review_profile is None:
+        args.review_profile = str(
+            runtime.get("review_profile", "normal") or "normal"
+        )
+    else:
+        runtime["review_profile"] = str(args.review_profile)
+    if args.hunters is None:
+        args.hunters = str(
+            runtime.get("research_hunters", DEFAULT_RESEARCH_HUNTERS_TEXT) or ""
+        )
+    else:
+        runtime["research_hunters"] = str(args.hunters)
+    if args.research_budget is None:
+        args.research_budget = str(runtime.get("research_budget", "standard"))
+    else:
+        runtime["research_budget"] = str(args.research_budget)
+    if args.proof_artifacts:
+        runtime["research_proof_artifacts"] = True
+    else:
+        args.proof_artifacts = bool(runtime.get("research_proof_artifacts", False))
+    if args.evidence_policy is None:
+        args.evidence_policy = str(
+            runtime.get("research_evidence_policy", "triage_evidence")
+            or "triage_evidence"
+        )
+    else:
+        runtime["research_evidence_policy"] = str(args.evidence_policy)
+    args._runtime_config = runtime
 
 
 def run_interactive_loop(engine, args, vector_backend):
@@ -334,9 +415,9 @@ def main():
         tui_requested = True
         sys.argv = [sys.argv[0], *sys.argv[2:]]
 
-    if len(sys.argv) > 1 and sys.argv[1] == "bench":
-        bench_command = " ".join(shlex.quote(part) for part in sys.argv[1:])
-        sys.argv = [sys.argv[0], "--non-interactive", "--command", bench_command]
+    if len(sys.argv) > 1 and sys.argv[1] in {"bench", "research", "variants"}:
+        command = " ".join(shlex.quote(part) for part in sys.argv[1:])
+        sys.argv = [sys.argv[0], "--non-interactive", "--command", command]
 
     parser = argparse.ArgumentParser(
         description="Metis: AI security focused code review.",
@@ -412,6 +493,32 @@ def main():
         help="Review execution mode for review commands (default from config: standard).",
     )
     parser.add_argument(
+        "--review-profile",
+        choices=["normal", "research"],
+        default=None,
+        help="Review objective profile for review_code (default from config: normal).",
+    )
+    parser.add_argument(
+        "--hunters",
+        default=None,
+        help="Comma-separated research hunters for --review-profile research.",
+    )
+    parser.add_argument(
+        "--research-budget",
+        default=None,
+        help="Budget label for research-profile review runs.",
+    )
+    parser.add_argument(
+        "--proof-artifacts",
+        action="store_true",
+        help="Include research proof artifact paths when available.",
+    )
+    parser.add_argument(
+        "--evidence-policy",
+        default=None,
+        help="Bounded evidence tool policy for research verification.",
+    )
+    parser.add_argument(
         "--skip-test-files",
         dest="skip_test_files",
         action="store_true",
@@ -472,7 +579,13 @@ def main():
             load_runtime_config=load_runtime_config,
             build_engine=build_engine,
         )
-        run_tui(session.engine, args, startup_state=session.startup_state)
+        _apply_research_runtime_defaults(args, session.runtime)
+        run_tui(
+            session.engine,
+            args,
+            startup_state=session.startup_state,
+            runtime=session.runtime,
+        )
         return
 
     runtime = load_runtime_config(enable_psql=(args.backend == "postgres"))
@@ -505,6 +618,7 @@ def main():
     )
     if args.review_mode is None:
         args.review_mode = str(runtime.get("review_mode", "standard") or "standard")
+    _apply_research_runtime_defaults(args, runtime)
     args.review_agentic_max_iterations = int(
         runtime.get("review_agentic_max_iterations", 2)
     )

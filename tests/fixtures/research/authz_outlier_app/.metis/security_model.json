@@ -1,0 +1,173 @@
+{
+  "analysis_root": "/Users/nazshe01/dev/metis/tests/fixtures/research/authz_outlier_app",
+  "assets": [
+    {
+      "file": "authz_outlier_app/app.py",
+      "id": "asset:projects",
+      "line": 18,
+      "metadata": {
+        "node_id": "function:authz_outlier_app/app.py::get_project"
+      },
+      "name": "projects",
+      "symbol": "get_project",
+      "tags": [
+        "route_group"
+      ],
+      "type": "route_group"
+    },
+    {
+      "file": "authz_outlier_app/app.py",
+      "id": "asset:status",
+      "line": 28,
+      "metadata": {
+        "node_id": "function:authz_outlier_app/app.py::status"
+      },
+      "name": "status",
+      "symbol": "status",
+      "tags": [
+        "route_group"
+      ],
+      "type": "route_group"
+    }
+  ],
+  "entrypoints": [
+    {
+      "file": "authz_outlier_app/app.py",
+      "id": "route:function:authz_outlier_app/app.py::get_project:/projects/<project_id>",
+      "line": 18,
+      "metadata": {
+        "guards": [
+          "require_project_member"
+        ],
+        "node_id": "function:authz_outlier_app/app.py::get_project",
+        "route_group": "projects",
+        "route_path": "/projects/<project_id>"
+      },
+      "name": "/projects/<project_id>",
+      "symbol": "get_project",
+      "tags": [
+        "entrypoint"
+      ],
+      "type": "route"
+    },
+    {
+      "file": "authz_outlier_app/app.py",
+      "id": "route:function:authz_outlier_app/app.py::status:/status",
+      "line": 28,
+      "metadata": {
+        "guards": [],
+        "node_id": "function:authz_outlier_app/app.py::status",
+        "route_group": "status",
+        "route_path": "/status"
+      },
+      "name": "/status",
+      "symbol": "status",
+      "tags": [
+        "entrypoint"
+      ],
+      "type": "route"
+    },
+    {
+      "file": "authz_outlier_app/app.py",
+      "id": "route:function:authz_outlier_app/app.py::update_project_settings:/projects/<project_id>/settings",
+      "line": 23,
+      "metadata": {
+        "guards": [],
+        "node_id": "function:authz_outlier_app/app.py::update_project_settings",
+        "route_group": "projects",
+        "route_path": "/projects/<project_id>/settings"
+      },
+      "name": "/projects/<project_id>/settings",
+      "symbol": "update_project_settings",
+      "tags": [
+        "entrypoint"
+      ],
+      "type": "route"
+    }
+  ],
+  "file_hashes": {
+    "authz_outlier_app/app.py": "eb7e16baeabfea2d9f01a5bd4d19b8508ede9b9c8fce92524ac3d17f16837482"
+  },
+  "frameworks": [
+    {
+      "file": "authz_outlier_app/app.py",
+      "id": "framework:function:authz_outlier_app/app.py::get_project:route",
+      "line": 18,
+      "metadata": {
+        "node_id": "function:authz_outlier_app/app.py::get_project"
+      },
+      "name": "route",
+      "symbol": "get_project",
+      "tags": [
+        "framework"
+      ],
+      "type": "framework"
+    },
+    {
+      "file": "authz_outlier_app/app.py",
+      "id": "framework:function:authz_outlier_app/app.py::status:route",
+      "line": 28,
+      "metadata": {
+        "node_id": "function:authz_outlier_app/app.py::status"
+      },
+      "name": "route",
+      "symbol": "status",
+      "tags": [
+        "framework"
+      ],
+      "type": "framework"
+    },
+    {
+      "file": "authz_outlier_app/app.py",
+      "id": "framework:function:authz_outlier_app/app.py::update_project_settings:route",
+      "line": 23,
+      "metadata": {
+        "node_id": "function:authz_outlier_app/app.py::update_project_settings"
+      },
+      "name": "route",
+      "symbol": "update_project_settings",
+      "tags": [
+        "framework"
+      ],
+      "type": "framework"
+    }
+  ],
+  "generated_at": "2026-05-19T22:44:55Z",
+  "guards": [
+    {
+      "file": "authz_outlier_app/app.py",
+      "id": "guard:function:authz_outlier_app/app.py::get_project:require_project_member",
+      "line": 18,
+      "metadata": {
+        "node_id": "function:authz_outlier_app/app.py::get_project"
+      },
+      "name": "require_project_member",
+      "symbol": "get_project",
+      "tags": [
+        "guard"
+      ],
+      "type": "guard"
+    },
+    {
+      "file": "authz_outlier_app/app.py",
+      "id": "guard:function:authz_outlier_app/app.py::require_project_member:require_project_member",
+      "line": 8,
+      "metadata": {
+        "node_id": "function:authz_outlier_app/app.py::require_project_member"
+      },
+      "name": "require_project_member",
+      "symbol": "require_project_member",
+      "tags": [
+        "guard"
+      ],
+      "type": "guard"
+    }
+  ],
+  "lessons": [],
+  "project_root_hash": "a05fa4943a47791e79096b041ba5f3291bfe8a59f5d87a3905d897ea29f40b15",
+  "sanitizers": [],
+  "schema_version": "1",
+  "sinks": [],
+  "sources": [],
+  "trust_boundaries": []
+}

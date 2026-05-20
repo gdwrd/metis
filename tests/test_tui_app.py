@@ -181,6 +181,35 @@ def test_tui_app_enter_accepts_completion_before_command_submit():
     asyncio.run(_run())
 
 
+def test_tui_app_slash_research_dispatches_to_runner():
+    async def _run():
+        runner = _Runner()
+        app = MetisTuiApp(runner, width_hint=80)
+        async with app.run_test() as pilot:
+            await pilot.click("#input")
+            await pilot.press(
+                "/",
+                "r",
+                "e",
+                "s",
+                "e",
+                "a",
+                "r",
+                "c",
+                "h",
+                "enter",
+            )
+            await pilot.pause()
+
+            assert runner.commands == ["research"]
+            assert not any(
+                "Unsupported command: /research" in line
+                for line in app.chat_transcript
+            )
+
+    asyncio.run(_run())
+
+
 def test_metis_logo_uses_large_arm_ascii_at_normal_width():
     logo = metis_logo(120)
 

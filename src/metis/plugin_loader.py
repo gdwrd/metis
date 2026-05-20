@@ -88,6 +88,13 @@ def _load_builtin_plugins(plugin_config):
         logger.warning(f"Failed to load built-in Solidity plugin: {e}")
 
     try:
+        from metis.plugins.ruby_plugin import RubyPlugin
+
+        plugins.append(RubyPlugin(plugin_config))
+    except Exception as e:
+        logger.warning(f"Failed to load built-in Ruby plugin: {e}")
+
+    try:
         from metis.plugins.rust_plugin import RustPlugin
 
         plugins.append(RustPlugin(plugin_config))
@@ -152,9 +159,23 @@ def load_plugins(plugin_config):
     """
     plugins = _load_entry_point_plugins(plugin_config)
     if plugins:
+        builtin_plugins = _load_builtin_plugins(plugin_config)
+        seen = {_plugin_name(plugin) for plugin in plugins}
+        for plugin in builtin_plugins:
+            name = _plugin_name(plugin)
+            if name and name not in seen:
+                plugins.append(plugin)
+                seen.add(name)
         return plugins
     logger.info("No entry point plugins found; falling back to built-ins")
     return _load_builtin_plugins(plugin_config)
+
+
+def _plugin_name(plugin) -> str:
+    try:
+        return str(plugin.get_name() or "").strip()
+    except Exception:
+        return ""
 
 
 def discover_supported_language_names(plugin_config):

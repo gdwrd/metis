@@ -1,0 +1,45 @@
+{
+  "mode": "review+research",
+  "quick": true,
+  "case_count": 7,
+  "case_ids": [
+    "internal-authz-outlier-001",
+    "internal-injection-path-001",
+    "internal-path-traversal-001",
+    "internal-ssrf-001",
+    "internal-deserialization-001",
+    "internal-memory-lifetime-001",
+    "internal-hardware-security-001"
+  ],
+  "by_cwe": {},
+  "hypotheses": {
+    "evidence_completeness_rate": 0.8285714285714286,
+    "evidence_completeness_rate_by_class": {
+      "CWE-1262": 0.8,
+      "CWE-22": 0.7333333333333333,
+      "CWE-416": 0.8,
+      "CWE-502": 0.7333333333333333,
+      "CWE-74": 0.92,
+      "CWE-862": 0.8666666666666667,
+      "CWE-918": 0.7333333333333333
+    },
+    "false_positive_rate_by_class": {
+      "CWE-1262": 0.0,
+      "CWE-22": 0.0,
+      "CWE-416": 0.0,
+      "CWE-502": 0.0,
+      "CWE-74": 0.0,
+      "CWE-862": 0.0,
+      "CWE-918": 0.0
+    },
+    "proven_recall_by_class": {
+      "CWE-1262": 1.0,
+      "CWE-22": 1.0,
+      "CWE-416": 1.0,
+      "CWE-502": 1.0,
+      "CWE-74": 1.0,
+      "CWE-862": 1.0,
+      "CWE-918": 1.0
+    }
+  }
+}

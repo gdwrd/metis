@@ -3,7 +3,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Any
 
 
 @dataclass(slots=True)
@@ -12,3 +13,4 @@ class CommandRuntime:
     command_args: list[str]
     use_retrieval_context: bool
     no_index_warning_emitted: bool = False
+    config: dict[str, Any] = field(default_factory=dict)

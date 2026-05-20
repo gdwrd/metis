@@ -47,6 +47,10 @@ class _DomainPaths:
     def __init__(self, base):
         self.review_sarif = base / "results" / "tui" / "run" / "review.sarif"
         self.triage_sarif = base / "results" / "tui" / "run" / "triage.sarif"
+        self.research_sarif = base / "results" / "tui" / "run" / "research.sarif"
+        self.research_report = (
+            base / "results" / "tui" / "run" / "research-report.json"
+        )
         self.security_report = base / "results" / "tui" / "run" / "security-report.md"
 
 
@@ -65,6 +69,10 @@ class _DomainRunner:
         self.artifacts.paths.review_sarif.parent.mkdir(parents=True, exist_ok=True)
         if request.name == "triage":
             self.artifacts.paths.triage_sarif.write_text("sarif", encoding="utf-8")
+        elif request.name == "research":
+            self.artifacts.paths.research_report.write_text("{}", encoding="utf-8")
+            self.artifacts.paths.research_sarif.write_text("sarif", encoding="utf-8")
+            self.artifacts.paths.security_report.write_text("report", encoding="utf-8")
         elif request.name == "security_report":
             self.artifacts.paths.security_report.write_text("report", encoding="utf-8")
         elif request.name != "index":
@@ -89,6 +97,7 @@ def test_chat_session_streams_model_response_with_context(tmp_path):
     assert "project_tree" in system
     assert "whole flow" in system
     assert "index(), review_code" in system
+    assert "research(output_file='results/research-report.json') only" in system
     assert "security_report" in system
 
 
@@ -241,6 +250,32 @@ def test_chat_session_can_call_review_code_domain_tool(tmp_path):
     )
     assert "review code completed." in updates[-1].text
     assert "SARIF saved:" in updates[-1].text
+
+
+def test_chat_session_research_tool_reports_research_and_security_artifacts(tmp_path):
+    engine = _Engine()
+    domain = _DomainRunner(tmp_path)
+    engine.llm_provider.model = _Model(
+        [
+            '{"tool_calls":[{"name":"research","arguments":{"output_file":"results/research-report.json"}}]}',
+            "Research complete.",
+        ]
+    )
+    session = TuiChatSession(
+        engine,
+        codebase_path=tmp_path,
+        tool_runner=TuiAgentToolRunner(tmp_path, domain_runner=domain),
+    )
+
+    updates = list(session.submit("run vulnerability research"))
+
+    assert domain.requests[0].name == "research"
+    assert domain.requests[0].args == ()
+    assert (tmp_path / "results" / "research-report.json").is_file()
+    assert "Research flow completed." in updates[-1].text
+    assert "Research report saved:" in updates[-1].text
+    assert "Research SARIF saved:" in updates[-1].text
+    assert "Security report saved:" in updates[-1].text
 
 
 def test_chat_session_extracts_tool_call_from_mixed_json_response(tmp_path):

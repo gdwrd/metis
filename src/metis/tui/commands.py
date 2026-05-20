@@ -15,6 +15,7 @@ TuiCommandName = Literal[
     "review_code",
     "review_file",
     "review_patch",
+    "research",
     "triage",
     "security_report",
     "init",
@@ -28,6 +29,7 @@ TUI_COMMANDS: tuple[TuiCommandName, ...] = (
     "review_code",
     "review_file",
     "review_patch",
+    "research",
     "triage",
     "security_report",
     "init",
@@ -40,6 +42,7 @@ DOMAIN_COMMANDS: tuple[TuiCommandName, ...] = (
     "review_code",
     "review_file",
     "review_patch",
+    "research",
     "triage",
     "security_report",
     "init",
@@ -50,6 +53,7 @@ COMMAND_COMPLETION_HINTS: dict[TuiCommandName, str] = {
     "review_code": "review the current project",
     "review_file": "review one file",
     "review_patch": "review a patch file",
+    "research": "run research and write report",
     "triage": "triage review SARIF",
     "security_report": "write an attack-chain report",
     "init": "write project context",
@@ -85,6 +89,17 @@ class TuiCommandRequest:
         if not self.args:
             return None
         return Path(self.args[0])
+
+
+@dataclass(frozen=True, slots=True)
+class TuiResearchCommandOptions:
+    hunters: tuple[str, ...] | None = None
+    rebuild: bool | None = None
+    research_budget: str | None = None
+    emit_killed: bool | None = None
+    emit_unresolved: bool | None = None
+    proof_artifacts: bool | None = None
+    evidence_policy: str | None = None
 
 
 def parse_slash_command(text: str) -> TuiCommandRequest:
@@ -127,6 +142,8 @@ def validate_tui_command(request: TuiCommandRequest) -> None:
         and request.args
     ):
         raise ValueError(f"/{request.name} does not accept positional arguments.")
+    if request.name == "research":
+        _validate_research_args(request.args)
     if not request.use_retrieval_context:
         if request.name == "security_report":
             return
@@ -142,6 +159,7 @@ def command_help() -> str:
             "/review_code [--ignore-index]",
             "/review_file PATH [--ignore-index]",
             "/review_patch PATH [--ignore-index]",
+            "/research [--hunters LIST] [--rebuild] [--research-budget NAME] [--emit-killed] [--emit-unresolved] [--proof-artifacts] [--evidence-policy NAME]",
             "/triage [PATH] [--ignore-index]",
             "/security_report [PATH] [--ignore-index]",
             "/init",
@@ -166,3 +184,87 @@ def command_completion_items(
         hint = COMMAND_COMPLETION_HINTS[command]
         matches.append((command, insert_text, f"/{command:<16} {hint}"))
     return tuple(matches)
+
+
+def _validate_research_args(args: tuple[str, ...]) -> None:
+    parse_research_command_options(args)
+
+
+def parse_research_command_options(args: tuple[str, ...]) -> TuiResearchCommandOptions:
+    hunters: tuple[str, ...] | None = None
+    rebuild: bool | None = None
+    research_budget: str | None = None
+    emit_killed: bool | None = None
+    emit_unresolved: bool | None = None
+    proof_artifacts: bool | None = None
+    evidence_policy: str | None = None
+    idx = 0
+    while idx < len(args):
+        arg = args[idx]
+        if arg == "--hunters":
+            raw = _research_value(args, idx, "--hunters")
+            hunters = tuple(item.strip() for item in raw.split(",") if item.strip())
+            if not hunters:
+                raise ValueError("/research --hunters requires a comma-separated list.")
+            idx += 2
+            continue
+        if arg == "--rebuild":
+            rebuild = True
+            idx += 1
+            continue
+        if arg == "--no-rebuild":
+            rebuild = False
+            idx += 1
+            continue
+        if arg in {"--research-budget", "--budget"}:
+            research_budget = _research_value(args, idx, arg)
+            idx += 2
+            continue
+        if arg == "--emit-killed":
+            emit_killed = True
+            idx += 1
+            continue
+        if arg == "--no-emit-killed":
+            emit_killed = False
+            idx += 1
+            continue
+        if arg == "--emit-unresolved":
+            emit_unresolved = True
+            idx += 1
+            continue
+        if arg == "--no-emit-unresolved":
+            emit_unresolved = False
+            idx += 1
+            continue
+        if arg == "--proof-artifacts":
+            proof_artifacts = True
+            idx += 1
+            continue
+        if arg == "--no-proof-artifacts":
+            proof_artifacts = False
+            idx += 1
+            continue
+        if arg == "--evidence-policy":
+            evidence_policy = _research_value(args, idx, arg)
+            idx += 2
+            continue
+        raise ValueError(f"Unsupported /research option: {arg}")
+    return TuiResearchCommandOptions(
+        hunters=hunters,
+        rebuild=rebuild,
+        research_budget=research_budget,
+        emit_killed=emit_killed,
+        emit_unresolved=emit_unresolved,
+        proof_artifacts=proof_artifacts,
+        evidence_policy=evidence_policy,
+    )
+
+
+def _research_value(args: tuple[str, ...], idx: int, option: str) -> str:
+    if (
+        idx + 1 >= len(args)
+        or not args[idx + 1].strip()
+        or args[idx + 1].startswith("--")
+    ):
+        raise ValueError(f"/research {option} requires a value.")
+    return args[idx + 1].strip()

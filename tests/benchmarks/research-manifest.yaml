@@ -1,0 +1,226 @@
+line_tolerance: 1
+cases:
+  - id: internal-authz-outlier-001
+    source: internal
+    cwe: CWE-862
+    language: python
+    path: cases/research/authz_outlier
+    quick: true
+    expected_findings: []
+    expected_hypotheses:
+      - hunter: authz_outlier
+        vulnerability_class: CWE-862
+        status: proven
+        file: app.py
+        symbol: update_project_settings
+        line_range: [23, 23]
+      - hunter: authz_outlier
+        vulnerability_class: CWE-862
+        status: killed
+        file: app.py
+        symbol: get_project
+        line_range: [18, 18]
+      - hunter: authz_outlier
+        vulnerability_class: CWE-862
+        status: unresolved
+        file: app.py
+        symbol: status
+        line_range: [28, 28]
+  - id: internal-injection-path-001
+    source: internal
+    cwe: CWE-74
+    language: python
+    path: cases/research/injection_path
+    quick: true
+    expected_findings: []
+    expected_hypotheses:
+      - hunter: injection_path
+        vulnerability_class: CWE-74
+        status: proven
+        file: app.py
+        symbol: run_command
+        line_range: [20, 20]
+      - hunter: injection_path
+        vulnerability_class: CWE-74
+        status: proven
+        file: app.py
+        symbol: run_command_with_extra_source
+        line_range: [27, 27]
+      - hunter: injection_path
+        vulnerability_class: CWE-74
+        status: proven
+        file: app.py
+        symbol: run_conditionally_validated_command
+        line_range: [55, 55]
+      - hunter: injection_path
+        vulnerability_class: CWE-74
+        status: proven
+        file: app.py
+        symbol: run_validated_command_overwritten
+        line_range: [63, 63]
+      - hunter: injection_path
+        vulnerability_class: CWE-74
+        status: proven
+        file: app.py
+        symbol: run_helper_command
+        line_range: [71, 71]
+      - hunter: injection_path
+        vulnerability_class: CWE-74
+        status: killed
+        file: app.py
+        symbol: run_validated_command
+        line_range: [40, 40]
+      - hunter: injection_path
+        vulnerability_class: CWE-74
+        status: killed
+        file: app.py
+        symbol: run_validated_after_unrelated_sanitizer
+        line_range: [47, 47]
+      - hunter: injection_path
+        vulnerability_class: CWE-74
+        status: killed
+        file: app.py
+        symbol: run_helper_sanitized
+        line_range: [77, 77]
+      - hunter: injection_path
+        vulnerability_class: CWE-74
+        status: killed
+        file: app.py
+        symbol: run_helper_with_internal_sanitizer
+        line_range: [84, 84]
+      - hunter: injection_path
+        vulnerability_class: CWE-74
+        status: unresolved
+        file: app.py
+        symbol: run_default_command
+        line_range: [112, 112]
+  - id: internal-path-traversal-001
+    source: internal
+    cwe: CWE-22
+    language: python
+    path: cases/research/path_traversal
+    quick: true
+    expected_findings: []
+    expected_hypotheses:
+      - hunter: path_traversal
+        vulnerability_class: CWE-22
+        status: proven
+        file: app.py
+        symbol: read_file
+        line_range: [17, 17]
+      - hunter: path_traversal
+        vulnerability_class: CWE-22
+        status: killed
+        file: app.py
+        symbol: read_safe_file
+        line_range: [23, 23]
+      - hunter: path_traversal
+        vulnerability_class: CWE-22
+        status: unresolved
+        file: app.py
+        symbol: read_default_file
+        line_range: [30, 30]
+  - id: internal-ssrf-001
+    source: internal
+    cwe: CWE-918
+    language: python
+    path: cases/research/ssrf
+    quick: true
+    expected_findings: []
+    expected_hypotheses:
+      - hunter: ssrf
+        vulnerability_class: CWE-918
+        status: proven
+        file: app.py
+        symbol: fetch_url
+        line_range: [19, 19]
+      - hunter: ssrf
+        vulnerability_class: CWE-918
+        status: killed
+        file: app.py
+        symbol: fetch_allowlisted_url
+        line_range: [25, 25]
+      - hunter: ssrf
+        vulnerability_class: CWE-918
+        status: unresolved
+        file: app.py
+        symbol: fetch_internal_status
+        line_range: [32, 32]
+  - id: internal-deserialization-001
+    source: internal
+    cwe: CWE-502
+    language: python
+    path: cases/research/deserialization
+    quick: true
+    expected_findings: []
+    expected_hypotheses:
+      - hunter: deserialization
+        vulnerability_class: CWE-502
+        status: proven
+        file: app.py
+        symbol: load_payload
+        line_range: [19, 19]
+      - hunter: deserialization
+        vulnerability_class: CWE-502
+        status: killed
+        file: app.py
+        symbol: load_signed_payload
+        line_range: [25, 25]
+      - hunter: deserialization
+        vulnerability_class: CWE-502
+        status: unresolved
+        file: app.py
+        symbol: load_default_payload
+        line_range: [32, 32]
+  - id: internal-memory-lifetime-001
+    source: internal
+    cwe: CWE-416
+    language: c
+    path: cases/research/memory_lifetime
+    quick: true
+    expected_findings: []
+    expected_hypotheses:
+      - hunter: memory_lifetime
+        vulnerability_class: CWE-416
+        status: proven
+        file: lifetime.c
+        symbol: finish_request_callback
+        line_range: [7, 7]
+      - hunter: memory_lifetime
+        vulnerability_class: CWE-416
+        status: killed
+        file: lifetime.c
+        symbol: finish_request_safe
+        line_range: [12, 12]
+      - hunter: memory_lifetime
+        vulnerability_class: CWE-416
+        status: unresolved
+        file: lifetime.c
+        symbol: cleanup_cache
+        line_range: [17, 17]
+  - id: internal-hardware-security-001
+    source: internal
+    cwe: CWE-1262
+    language: systemverilog
+    path: cases/research/hardware_security
+    quick: true
+    expected_findings: []
+    expected_hypotheses:
+      - hunter: hardware_security
+        vulnerability_class: CWE-1262
+        status: proven
+        file: secure_regs.sv
+        symbol: insecure_key_regs
+        line_range: [1, 1]
+      - hunter: hardware_security
+        vulnerability_class: CWE-1262
+        status: killed
+        file: secure_regs.sv
+        symbol: secure_key_regs
+        line_range: [13, 13]
+      - hunter: hardware_security
+        vulnerability_class: CWE-1262
+        status: unresolved
+        file: secure_regs.sv
+        symbol: boot_key_shadow
+        line_range: [27, 27]

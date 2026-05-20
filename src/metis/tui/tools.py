@@ -41,6 +41,7 @@ DOMAIN_TOOLS = {
     "review_code",
     "review_file",
     "review_patch",
+    "research",
     "triage",
     "security_report",
 }
@@ -129,6 +130,13 @@ class TuiAgentToolPolicy:
             raise ValueError("Security report output_file must use a .md extension")
         return target
 
+    def validate_research_output_path(self, raw_path: str) -> Path:
+        target = self.validate_path(raw_path)
+        self._validate_results_output_path(target)
+        if target.suffix.lower() != ".json":
+            raise ValueError("Research output_file must use a .json extension")
+        return target
+
     def _validate_results_output_path(self, target: Path) -> None:
         try:
             relative = target.relative_to(self.codebase_path)
@@ -149,12 +157,18 @@ class TuiAgentToolPolicy:
                 if not isinstance(path, str) or not path:
                     raise ValueError(f"{name} path must be a relative path")
                 self.validate_path(path)
+        if name == "research" and "hunters" in args:
+            hunters = args.get("hunters")
+            if not isinstance(hunters, str) or not hunters.strip():
+                raise ValueError("research hunters must be a comma-separated string")
         if "output_file" in args:
             output_file = args.get("output_file")
             if not isinstance(output_file, str) or not output_file:
                 raise ValueError("output_file must be a relative output path")
             if name == "security_report":
                 self.validate_report_output_path(output_file)
+            elif name == "research":
+                self.validate_research_output_path(output_file)
             else:
                 self.validate_output_path(output_file)
         if "use_retrieval_context" in args and not isinstance(
@@ -190,9 +204,11 @@ class TuiAgentToolRunner:
                 "Controlled Metis execution tools are available when the user asks you to run a workflow.",
                 "These tools run inside Metis and may create SARIF artifacts; do not call shell commands.",
                 "For whole-flow requests such as 'run everything', 'full flow', 'full review', 'full scan', or 'end-to-end', call one ordered tool_calls array with index first, review_code second, triage third, and security_report fourth.",
+                "For research-flow requests such as 'run research', 'find vulnerabilities', 'vulnerability research', or 'security research', call research only; it runs the default hunters and then creates a Markdown security report from the research SARIF.",
                 "- review_code(output_file='results/review.sarif', use_retrieval_context=true): review the launched project; SARIF is saved by default even when output_file is omitted.",
                 "- review_file(path, output_file='results/review.sarif', use_retrieval_context=true): review one relative project file.",
                 "- review_patch(path, output_file='results/review.sarif', use_retrieval_context=true): review one relative patch file.",
+                "- research(output_file='results/research-report.json'): run complete current-project vulnerability research with the default hunter set, save report, SARIF, hypotheses, evidence artifacts, and write a Markdown security report from the research findings.",
                 "- triage(path='results/review.sarif', output_file='results/triage.sarif', use_retrieval_context=true): triage SARIF; path is optional after a review.",
                 "- security_report(path='results/triage.sarif', output_file='results/security-report.md'): review triage SARIF with AI chat and save a Markdown security report with scored attack chains and non-destructive PoCs.",
                 "- index(): build retrieval context for the launched project.",
@@ -248,6 +264,10 @@ class TuiAgentToolRunner:
         if output_file is not None and produced is not None:
             if name == "security_report":
                 copied_to = self.policy.validate_report_output_path(str(output_file))
+            elif name == "research":
+                copied_to = self.policy.validate_research_output_path(
+                    str(output_file)
+                )
             else:
                 copied_to = self.policy.validate_output_path(str(output_file))
             copied_to.parent.mkdir(parents=True, exist_ok=True)
@@ -257,6 +277,14 @@ class TuiAgentToolRunner:
         if produced is not None:
             if name == "security_report":
                 lines.append(f"default_report={produced}")
+            elif name == "research":
+                lines.append(f"default_report={produced}")
+                research_sarif = self._artifact_path("research_sarif")
+                security_report = self._artifact_path("security_report")
+                if research_sarif is not None and research_sarif.is_file():
+                    lines.append(f"default_sarif={research_sarif}")
+                if security_report is not None and security_report.is_file():
+                    lines.append(f"default_security_report={security_report}")
             else:
                 lines.append(f"default_sarif={produced}")
         if copied_to is not None:
@@ -312,6 +340,8 @@ class TuiAgentToolRunner:
             path = kwargs.get("path") or kwargs.get("sarif_path")
             if path:
                 args.append(str(self.policy.validate_path(str(path))))
+        elif name == "research" and kwargs.get("hunters"):
+            args.extend(["--hunters", str(kwargs["hunters"])])
         use_retrieval_context = bool(kwargs.get("use_retrieval_context", True))
         return TuiCommandRequest(
             name=cast(TuiCommandName, name),
@@ -327,10 +357,20 @@ class TuiAgentToolRunner:
             path = getattr(paths, "review_sarif", None)
         elif name == "triage":
             path = getattr(paths, "triage_sarif", None)
+        elif name == "research":
+            path = getattr(paths, "research_report", None)
         elif name == "security_report":
             path = getattr(paths, "security_report", None)
         else:
             path = None
+        if path is None:
+            return None
+        return Path(path)
+
+    def _artifact_path(self, name: str) -> Path | None:
+        artifacts = getattr(self.domain_runner, "artifacts", None)
+        paths = getattr(artifacts, "paths", None)
+        path = getattr(paths, name, None)
         if path is None:
             return None
         return Path(path)

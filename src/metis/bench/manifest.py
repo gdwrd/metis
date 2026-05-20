@@ -19,6 +19,27 @@ class ExpectedFinding:
 
 
 @dataclass(frozen=True)
+class ExpectedHypothesis:
+    hunter: str
+    vulnerability_class: str
+    status: str
+    file: str | None = None
+    line_range: tuple[int, int] | None = None
+    symbol: str | None = None
+    id: str | None = None
+
+
+@dataclass(frozen=True)
+class VariantSources:
+    from_fix: str | None = None
+    from_sarif: str | None = None
+    from_report: str | None = None
+
+    def any(self) -> bool:
+        return any((self.from_fix, self.from_sarif, self.from_report))
+
+
+@dataclass(frozen=True)
 class BenchmarkCase:
     id: str
     source: str
@@ -26,6 +47,8 @@ class BenchmarkCase:
     language: str
     path: str
     expected_findings: tuple[ExpectedFinding, ...]
+    expected_hypotheses: tuple[ExpectedHypothesis, ...] = ()
+    variant_sources: VariantSources | None = None
     quick: bool = False
 
     def case_path(self, manifest_dir: Path) -> Path:
@@ -96,6 +119,11 @@ def _parse_case(item: Any) -> BenchmarkCase:
         language=str(item.get("language") or "unknown"),
         path=str(item.get("path") or "").strip(),
         expected_findings=tuple(_parse_expected(raw) for raw in expected),
+        expected_hypotheses=tuple(
+            _parse_expected_hypothesis(raw)
+            for raw in item.get("expected_hypotheses", []) or []
+        ),
+        variant_sources=_parse_variant_sources(item.get("variant_sources")),
         quick=bool(item.get("quick", False)),
     )
 
@@ -117,6 +145,52 @@ def _parse_expected(item: Any) -> ExpectedFinding:
             str(item["severity_min"]).strip() if item.get("severity_min") else None
         ),
     )
+
+
+def _parse_expected_hypothesis(item: Any) -> ExpectedHypothesis:
+    if not isinstance(item, dict):
+        raise ValueError("expected_hypotheses entries must be mappings")
+    line_range = item.get("line_range")
+    parsed_range = None
+    if line_range is not None:
+        if not isinstance(line_range, list | tuple) or len(line_range) != 2:
+            raise ValueError("expected hypothesis line_range must contain [start, end]")
+        start, end = int(line_range[0]), int(line_range[1])
+        if start <= 0 or end < start:
+            raise ValueError(
+                "expected hypothesis line_range must be positive and ordered"
+            )
+        parsed_range = (start, end)
+    return ExpectedHypothesis(
+        hunter=str(item.get("hunter") or "").strip(),
+        vulnerability_class=str(
+            item.get("vulnerability_class") or item.get("cwe") or "CWE-Unknown"
+        ),
+        status=str(item.get("status") or "proven").strip(),
+        file=str(item["file"]).strip() if item.get("file") else None,
+        line_range=parsed_range,
+        symbol=str(item["symbol"]).strip() if item.get("symbol") else None,
+        id=str(item["id"]).strip() if item.get("id") else None,
+    )
+
+
+def _parse_variant_sources(item: Any) -> VariantSources | None:
+    if item is None:
+        return None
+    if not isinstance(item, dict):
+        raise ValueError("variant_sources must be a mapping")
+    sources = VariantSources(
+        from_fix=str(item["from_fix"]).strip() if item.get("from_fix") else None,
+        from_sarif=(
+            str(item["from_sarif"]).strip() if item.get("from_sarif") else None
+        ),
+        from_report=(
+            str(item["from_report"]).strip() if item.get("from_report") else None
+        ),
+    )
+    if not sources.any():
+        raise ValueError("variant_sources must contain at least one source")
+    return sources
 
 
 def _parse_cwe_equivalence(raw: Any) -> dict[str, tuple[str, ...]]:

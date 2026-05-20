@@ -152,6 +152,36 @@ def test_generate_sarif_uses_issue_metadata_when_source_missing():
     assert props["metisToolTrace"][0]["detail"].endswith("...[truncated]")
 
 
+def test_generate_sarif_preserves_research_properties():
+    results = {
+        "reviews": [
+            {
+                "file": "app.py",
+                "reviews": [
+                    {
+                        "issue": "Missing guard",
+                        "line_number": 7,
+                        "properties": {
+                            "metisHypothesisId": "hyp-123",
+                            "metisHunter": "authz_outlier",
+                            "metisEvidenceCompleteness": {"ratio": 1.0},
+                            "ignoredNone": None,
+                        },
+                    }
+                ],
+            }
+        ]
+    }
+
+    sarif = generate_sarif(results)
+
+    props = sarif["runs"][0]["results"][0]["properties"]
+    assert props["metisHypothesisId"] == "hyp-123"
+    assert props["metisHunter"] == "authz_outlier"
+    assert props["metisEvidenceCompleteness"] == {"ratio": 1.0}
+    assert "ignoredNone" not in props
+
+
 def test_generate_sarif_clamps_line_numbers_when_file_shorter(tmp_path):
     """Keep reported line inside file bounds while preserving original line number metadata."""
     lines = ["one\n", "two\n", "three\n"]

@@ -1,0 +1,9 @@
+diff --git a/app.py b/app.py
+index 5555555..6666666 100644
+--- a/app.py
++++ b/app.py
+@@ -45,5 +45,7 @@ def set_quota_limit(limit):
+ def set_quota_limit(limit):
++    if len(limit) < 32:
++        return limit
+     return None

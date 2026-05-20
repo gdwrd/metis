@@ -181,6 +181,12 @@ def generate_sarif(
             if confidence is not None:
                 properties["confidence"] = confidence
 
+            issue_properties = issue.get("properties")
+            if isinstance(issue_properties, dict):
+                for key, value in issue_properties.items():
+                    if value is not None:
+                        properties[str(key)] = value
+
             tool_trace = issue.get("tool_trace")
             if isinstance(tool_trace, list) and tool_trace:
                 properties["metisToolTrace"] = _clip_tool_trace_property(tool_trace)

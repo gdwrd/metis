@@ -23,6 +23,7 @@ from .scoring import (
     compare_perf_to_baseline,
     compare_to_baseline,
     score_sarif,
+    score_hypotheses,
 )
 
 
@@ -52,6 +53,13 @@ class BenchmarkOptions:
     perf: bool = False
     perf_baseline_path: str | None = None
     perf_wallclock_tolerance: float = 0.20
+    research: bool = False
+
+
+@dataclass(frozen=True)
+class ResearchBenchmarkCaseResult:
+    hypotheses: list[Any]
+    metric_summary: dict[str, Any]
 
 
 def run_benchmark(
@@ -60,6 +68,7 @@ def run_benchmark(
     *,
     review_file_func: Callable[..., dict[str, Any] | None] | None = None,
     triage_func: Callable[..., dict[str, Any]] | None = None,
+    research_func: Callable[..., Any] | None = None,
 ) -> dict[str, Any]:
     started = time.monotonic()
     manifest = load_manifest(options.manifest_path)
@@ -73,18 +82,21 @@ def run_benchmark(
     commands: dict[str, dict[str, Any]] = {}
     review_started = time.monotonic()
     review_usage_before = _usage_totals(engine)
-    for case in selected_cases:
-        reviews.extend(
-            _collect_case_reviews(engine, manifest, case, review_file_func, options)
-        )
-        completed_cases.append(case)
-        partial_reason = _cap_stop_reason(
-            options,
-            started_at=started,
-            usage=_usage_totals(engine),
-        )
-        if partial_reason:
-            break
+    if _should_run_review_phase(options, selected_cases):
+        for case in selected_cases:
+            reviews.extend(
+                _collect_case_reviews(engine, manifest, case, review_file_func, options)
+            )
+            completed_cases.append(case)
+            partial_reason = _cap_stop_reason(
+                options,
+                started_at=started,
+                usage=_usage_totals(engine),
+            )
+            if partial_reason:
+                break
+    else:
+        completed_cases.extend(selected_cases)
     commands["review_code"] = _command_metrics(
         started_at=review_started,
         usage_before=review_usage_before,
@@ -120,10 +132,40 @@ def run_benchmark(
             usage=_usage_totals(engine),
         )
 
+    hypotheses: list[Any] = []
+    research_metrics_by_case: dict[str, dict[str, Any]] = {}
+    if options.research or research_func is not None:
+        research_started = time.monotonic()
+        research_usage_before = _usage_totals(engine)
+        for case in cases:
+            case_research = _collect_case_hypotheses(
+                engine,
+                manifest,
+                case,
+                research_func,
+                options,
+            )
+            hypotheses.extend(case_research.hypotheses)
+            if case_research.metric_summary:
+                research_metrics_by_case[case.id] = case_research.metric_summary
+        commands["research"] = _command_metrics(
+            started_at=research_started,
+            usage_before=research_usage_before,
+            usage_after=_usage_totals(engine),
+        )
+        partial_reason = partial_reason or _cap_stop_reason(
+            options,
+            started_at=started,
+            usage=_usage_totals(engine),
+        )
+
     tokens = _usage_totals(engine)
+    mode = "review+triage" if options.triage else "review"
+    if options.research or research_func is not None:
+        mode = f"{mode}+research"
     result = {
         "run_id": str(uuid4()),
-        "mode": "review+triage" if options.triage else "review",
+        "mode": mode,
         "review_mode": options.review_mode,
         "model": _model_name(engine),
         "git_sha": _git_sha(),
@@ -141,6 +183,17 @@ def run_benchmark(
         ),
         "tokens": tokens,
     }
+    if options.research or research_func is not None:
+        result["hypotheses"] = score_hypotheses(
+            hypotheses,
+            manifest,
+            cases=cases,
+            research_metrics={
+                "cases": research_metrics_by_case,
+                "commands": commands,
+                "research_command": commands.get("research", {}),
+            },
+        )
     if options.perf:
         result["perf"] = True
         result["commands"] = commands
@@ -234,6 +287,168 @@ def _collect_case_reviews(
         if result:
             results.append(result)
     return results
+
+
+def _collect_case_hypotheses(
+    engine,
+    manifest: BenchmarkManifest,
+    case: BenchmarkCase,
+    research_func: Callable[..., Any] | None,
+    options: BenchmarkOptions,
+) -> ResearchBenchmarkCaseResult:
+    root = case.case_path(manifest.root)
+    if not root.exists():
+        raise ValueError(f"Benchmark case path does not exist: {root}")
+    if case.variant_sources is not None and research_func is None:
+        research_service = getattr(engine, "research", None)
+        research_callable = getattr(research_service, "run_variants", None)
+        if research_callable is None:
+            raise ValueError(
+                "Variant benchmark requested but engine has no variant service"
+            )
+        from metis.engine.research import ResearchOptions
+
+        sources = _variant_source_paths(root, case)
+        result = research_callable(
+            str(root),
+            from_fix=sources["from_fix"],
+            from_sarif=sources["from_sarif"],
+            from_report=sources["from_report"],
+            options=ResearchOptions(
+                persist=False,
+                emit_killed=True,
+                emit_unresolved=True,
+                research_budget=_research_budget_label(options),
+            ),
+        )
+        return _research_case_result(result, case.id)
+
+    research_callable = research_func
+    if research_callable is None:
+        research_service = getattr(engine, "research", None)
+        research_callable = getattr(research_service, "run", None)
+    if research_callable is None:
+        raise ValueError(
+            "Research benchmark requested but engine has no research service"
+        )
+    if research_func is None:
+        hunters = _case_research_hunters(case)
+        if "variant_patch" in hunters:
+            raise ValueError(
+                f"Benchmark case {case.id} expects variant_patch hypotheses "
+                "but is missing variant_sources"
+            )
+        if hunters:
+            from metis.engine.research import ResearchOptions
+
+            result = research_callable(
+                str(root),
+                options=ResearchOptions(
+                    hunters=hunters,
+                    research_budget=_research_budget_label(options),
+                ),
+            )
+        else:
+            result = research_callable(str(root))
+    else:
+        result = research_callable(str(root))
+    return _research_case_result(result, case.id)
+
+
+def _research_case_result(result: Any, case_id: str) -> ResearchBenchmarkCaseResult:
+    return ResearchBenchmarkCaseResult(
+        hypotheses=_hypotheses_from_result(result, case_id),
+        metric_summary=_metric_summary_from_result(result),
+    )
+
+
+def _variant_source_paths(root: Path, case: BenchmarkCase) -> dict[str, str | None]:
+    sources = case.variant_sources
+    if sources is None:
+        return {"from_fix": None, "from_sarif": None, "from_report": None}
+    return {
+        "from_fix": _resolve_variant_source(root, sources.from_fix),
+        "from_sarif": _resolve_variant_source(root, sources.from_sarif),
+        "from_report": _resolve_variant_source(root, sources.from_report),
+    }
+
+
+def _resolve_variant_source(root: Path, value: str | None) -> str | None:
+    if not value:
+        return None
+    path = Path(value)
+    if path.is_absolute():
+        return str(path)
+    return str((root / path).resolve())
+
+
+def _hypotheses_from_result(result: Any, case_id: str) -> list[Any]:
+    if result is None:
+        return []
+    if isinstance(result, list):
+        return _case_scoped_hypotheses(result, case_id)
+    generated = getattr(result, "generated", None)
+    if isinstance(generated, list):
+        return _case_scoped_hypotheses(generated, case_id)
+    if isinstance(result, dict):
+        raw_generated = result.get("generated")
+        if isinstance(raw_generated, list):
+            return _case_scoped_hypotheses(raw_generated, case_id)
+        raw_hypotheses = result.get("hypotheses")
+        if isinstance(raw_hypotheses, list):
+            return _case_scoped_hypotheses(raw_hypotheses, case_id)
+    return []
+
+
+def _metric_summary_from_result(result: Any) -> dict[str, Any]:
+    metric_summary = getattr(result, "metric_summary", None)
+    if isinstance(metric_summary, dict):
+        return dict(metric_summary)
+    if isinstance(result, dict) and isinstance(result.get("metric_summary"), dict):
+        return dict(result["metric_summary"])
+    return {}
+
+
+def _case_research_hunters(case: BenchmarkCase) -> tuple[str, ...]:
+    hunters: list[str] = []
+    for hypothesis in case.expected_hypotheses:
+        hunter = str(hypothesis.hunter or "").strip()
+        if hunter and hunter not in hunters:
+            hunters.append(hunter)
+    return tuple(hunters)
+
+
+def _should_run_review_phase(
+    options: BenchmarkOptions,
+    selected_cases: tuple[BenchmarkCase, ...],
+) -> bool:
+    if not options.research:
+        return True
+    return any(case.expected_findings for case in selected_cases)
+
+
+def _research_budget_label(options: BenchmarkOptions) -> str:
+    return "quick" if options.quick else "standard"
+
+
+def _case_scoped_hypotheses(hypotheses: list[Any], case_id: str) -> list[Any]:
+    scoped: list[Any] = []
+    for hypothesis in hypotheses:
+        payload = _copy_hypothesis_payload(hypothesis)
+        if isinstance(payload, dict):
+            payload["case_id"] = case_id
+            scoped.append(payload)
+        else:
+            scoped.append(hypothesis)
+    return scoped
+
+
+def _copy_hypothesis_payload(hypothesis: Any) -> dict[str, Any] | None:
+    dump = getattr(hypothesis, "model_dump", None)
+    if callable(dump):
+        payload = dump(mode="json")
+        return dict(payload) if isinstance(payload, dict) else None
+    return dict(hypothesis) if isinstance(hypothesis, dict) else None
 
 
 def _case_source_files(case: BenchmarkCase, manifest: BenchmarkManifest) -> list[Path]:

@@ -9,6 +9,16 @@ from importlib.resources import files, as_file
 from pathlib import Path
 
 logger = logging.getLogger("metis")
+DEFAULT_RESEARCH_HUNTERS = (
+    "authz_outlier",
+    "sql_injection",
+    "injection_path",
+    "path_traversal",
+    "ssrf",
+    "deserialization",
+    "memory_lifetime",
+    "hardware_security",
+)
 
 DEFAULT_EMBED_BATCH_SIZE = 16
 
@@ -184,6 +194,31 @@ def load_runtime_config(config_path=None, enable_psql=False):
     )
     runtime["review_agentic_wallclock_seconds"] = float(
         agentic_cfg.get("wallclock_seconds", 60.0)
+    )
+
+    research_cfg = cfg.get("research", {}) or {}
+    research_hunters = research_cfg.get("hunters", DEFAULT_RESEARCH_HUNTERS)
+    if isinstance(research_hunters, str):
+        runtime["research_hunters"] = research_hunters
+    else:
+        runtime["research_hunters"] = ",".join(
+            str(hunter).strip()
+            for hunter in research_hunters
+            if str(hunter or "").strip()
+        )
+    runtime["research_budget"] = str(
+        research_cfg.get("budget", research_cfg.get("research_budget", "standard"))
+        or "standard"
+    )
+    runtime["research_emit_killed"] = bool(research_cfg.get("emit_killed", False))
+    runtime["research_emit_unresolved"] = bool(
+        research_cfg.get("emit_unresolved", False)
+    )
+    runtime["research_proof_artifacts"] = bool(
+        research_cfg.get("proof_artifacts", False)
+    )
+    runtime["research_evidence_policy"] = str(
+        research_cfg.get("evidence_policy", "triage_evidence") or "triage_evidence"
     )
 
     # Query config

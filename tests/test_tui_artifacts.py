@@ -40,6 +40,8 @@ def test_artifact_store_writes_manifest_and_command_log(tmp_path):
     manifest = json.loads(store.paths.manifest.read_text(encoding="utf-8"))
     assert manifest["run_id"] == "run-1"
     assert manifest["commands"][0]["status"] == "succeeded"
+    assert manifest["artifacts"]["research_report"].endswith("research-report.json")
+    assert manifest["artifacts"]["research_sarif"].endswith("research.sarif")
     assert manifest["artifacts"]["security_report"].endswith("security-report.md")
     assert manifest["latest_review_sarif_source"] == "current-run"
     assert log_path.read_text(encoding="utf-8").count("command.started") == 1
