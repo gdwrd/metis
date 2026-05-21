@@ -60,7 +60,10 @@ def test_research_service_runs_authz_outlier_and_can_persist(engine, tmp_path):
     engine.codebase_path = str(tmp_path)
     engine._config.codebase_path = str(tmp_path)
 
-    result = engine.research.run(repo, options=ResearchOptions(persist=True))
+    result = engine.research.run(
+        repo,
+        options=ResearchOptions(hunters=("authz_outlier",), persist=True),
+    )
 
     assert len(result.generated) == 3
     assert result.hypotheses_path.endswith(".metis/research/hypotheses.jsonl")
@@ -88,7 +91,10 @@ def test_research_service_uses_shared_security_model_for_authz(
         _private_scan_should_not_run,
     )
 
-    result = engine.research.run(repo)
+    result = engine.research.run(
+        repo,
+        options=ResearchOptions(hunters=("authz_outlier",)),
+    )
 
     assert [item.status for item in result.proven] == [HypothesisStatus.PROVEN]
     assert [item.status for item in result.killed] == [HypothesisStatus.KILLED]

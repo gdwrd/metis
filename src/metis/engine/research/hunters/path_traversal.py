@@ -3,10 +3,8 @@
 
 from __future__ import annotations
 
-from metis.engine.research.hunters.graph_pattern import (
-    GraphPatternHunter,
-    GraphPatternSpec,
-)
+from metis.engine.research.hunters._rule_graph import rule_graph_spec
+from metis.engine.research.hunters.graph_pattern import GraphPatternHunter
 
 
 class PathTraversalHunter(GraphPatternHunter):
@@ -15,24 +13,17 @@ class PathTraversalHunter(GraphPatternHunter):
 
     def __init__(self) -> None:
         super().__init__(
-            GraphPatternSpec(
+            rule_graph_spec(
                 name=self.name,
-                vulnerability_class=self.vulnerability_class,
+                family="path_traversal",
                 title="Path traversal",
                 sink_obligation="filesystem_sink",
                 missing_mitigation_obligation="missing_canonicalization",
                 mitigation_label="canonicalization or root confinement",
-                sink_markers=("open", "fopen", "readfile", "send_file"),
-                mitigation_markers=(
-                    "safe_join",
-                    "canonical",
-                    "normalize",
-                    "validate",
-                    "allowlist",
-                ),
                 impact=(
                     "Attacker-controlled path input may reach a filesystem sink "
                     "without canonicalization or root confinement."
                 ),
+                default_enabled=True,
             )
         )

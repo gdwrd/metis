@@ -7,6 +7,7 @@ from metis.engine.research.hunters.graph_pattern import (
     GraphPatternHunter,
     GraphPatternSpec,
 )
+from metis.engine.research.rules import markers_for
 
 
 class InjectionPathHunter(GraphPatternHunter):
@@ -22,36 +23,43 @@ class InjectionPathHunter(GraphPatternHunter):
                 sink_obligation="sink",
                 missing_mitigation_obligation="missing_sanitizer",
                 mitigation_label="sanitizer or parameterization",
-                sink_markers=(
-                    "execute",
-                    "executemany",
-                    "raw",
-                    "system",
-                    "check_output",
-                    "popen",
-                    "spawn",
-                    "spawn_sync",
-                    "child_process",
-                    "eval",
-                    "exec",
-                    "execsync",
-                    "shell_exec",
-                    "passthru",
-                    "proc_open",
-                    "function",
+                sink_markers=markers_for(
+                    "sink",
+                    families=(
+                        "command_injection",
+                        "code_injection",
+                        "template_injection",
+                    ),
                 ),
-                mitigation_markers=(
-                    "sanitize",
-                    "validate",
-                    "escape",
-                    "escapeshellarg",
-                    "escapeshellcmd",
-                    "allowlist",
-                    "parameterize",
+                mitigation_markers=markers_for(
+                    "sanitizer",
+                    families=(
+                        "command_injection",
+                        "code_injection",
+                        "template_injection",
+                        "sql_injection",
+                    ),
                 ),
                 impact=(
                     "Attacker-controlled input may cross an interpreter or command "
                     "boundary without sanitization or parameterization."
                 ),
+                supported_languages=(
+                    "python",
+                    "javascript",
+                    "typescript",
+                    "php",
+                    "perl",
+                    "ruby",
+                    "go",
+                    "rust",
+                    "lua",
+                ),
+                rule_families=(
+                    "command_injection",
+                    "code_injection",
+                    "template_injection",
+                ),
+                default_enabled=False,
             )
         )

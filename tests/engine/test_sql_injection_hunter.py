@@ -27,7 +27,9 @@ def test_sql_injection_hunter_proves_php_and_perl_server_script_paths(
     engine.codebase_path = str(repo)
     engine._config.codebase_path = str(repo)
 
-    result = engine.research.run(repo, options=ResearchOptions(hunters=("sql_injection",)))
+    result = engine.research.run(
+        repo, options=ResearchOptions(hunters=("sql_injection",))
+    )
 
     assert result.metric_summary["selected_hunters"] == ("sql_injection",)
     assert result.metric_summary["sql_injection"]["proven"] == 2
@@ -47,3 +49,32 @@ def test_sql_injection_hunter_proves_php_and_perl_server_script_paths(
             "missing_parameterization",
             "impact",
         }
+
+
+def test_sql_injection_hunter_normalizes_javascript_db_wrappers(engine, tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "app.js").write_text(
+        "function search(req, db) {\n"
+        "  const id = req.query.id;\n"
+        "  return db.query('SELECT * FROM users WHERE id=' + id);\n"
+        "}\n"
+        "function searchSafe(req, db) {\n"
+        "  const id = prepare(req.query.id);\n"
+        "  return db.query('SELECT * FROM users WHERE id=?', id);\n"
+        "}\n",
+        encoding="utf-8",
+    )
+    engine.codebase_path = str(repo)
+    engine._config.codebase_path = str(repo)
+
+    result = engine.research.run(
+        repo,
+        options=ResearchOptions(hunters=("sql_injection",), rebuild=True),
+    )
+
+    by_symbol = {item.locations[0].symbol: item for item in result.generated}
+    assert by_symbol["search"].status == HypothesisStatus.PROVEN
+    assert by_symbol["search"].sink == "db.query"
+    assert by_symbol["searchSafe"].status == HypothesisStatus.KILLED
+    assert by_symbol["searchSafe"].observed_guard == "prepare"

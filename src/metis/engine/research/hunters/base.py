@@ -24,6 +24,12 @@ class HunterMetadata:
     required_graph_fields: tuple[str, ...] = ()
     evidence_obligations: tuple[str, ...] = ()
     benchmark_classes: tuple[str, ...] = ()
+    rule_families: tuple[str, ...] = ()
+    default_enabled: bool = False
+    experimental: bool = False
+    promotion_criteria: tuple[str, ...] = ()
+    promotion_status: str = "unassessed"
+    promotion_skip_reason: str | None = None
 
 
 class Hunter(Protocol):

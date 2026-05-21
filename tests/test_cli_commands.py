@@ -15,6 +15,8 @@ from metis.engine.research import (
     ResearchRunResult,
     SecurityGraph,
 )
+from metis.plugins.extra_plugins import JavaPlugin, YamlPlugin
+from metis.plugins.python_plugin import PythonPlugin
 
 
 def test_run_review_code_uses_review_domain_surface(monkeypatch):
@@ -477,6 +479,64 @@ def test_run_research_uses_runtime_defaults(monkeypatch, tmp_path):
     assert options.emit_unresolved is True
     assert options.proof_artifacts is True
     assert options.evidence_policy == "triage_evidence"
+
+
+def test_run_research_languages_saves_parser_inventory(monkeypatch, tmp_path):
+    printed = []
+    engine = SimpleNamespace(
+        codebase_path=str(tmp_path),
+        plugins=[PythonPlugin({}), JavaPlugin({}), YamlPlugin({})],
+    )
+    output = tmp_path / "languages.json"
+    args = SimpleNamespace(quiet=False, output_file=[str(output)])
+
+    monkeypatch.setattr(
+        commands,
+        "print_console",
+        lambda message, *_args, **_kwargs: printed.append(str(message)),
+    )
+
+    commands.run_research(
+        engine,
+        ["languages"],
+        args,
+        CommandRuntime(
+            command="research",
+            command_args=[],
+            use_retrieval_context=False,
+        ),
+    )
+
+    assert output.exists()
+    assert '"language_count": 3' in output.read_text(encoding="utf-8")
+    assert '"alias_source": "identity"' in output.read_text(encoding="utf-8")
+    assert "Research languages complete" in printed[-1]
+
+
+def test_run_research_hunters_saves_hunter_inventory(monkeypatch, tmp_path):
+    output = tmp_path / "hunters.json"
+    args = SimpleNamespace(quiet=True, output_file=[str(output)])
+    monkeypatch.setattr(commands, "print_console", lambda *_args, **_kwargs: None)
+
+    commands.run_research(
+        SimpleNamespace(codebase_path=str(tmp_path)),
+        ["hunters"],
+        args,
+        CommandRuntime(
+            command="research",
+            command_args=[],
+            use_retrieval_context=False,
+        ),
+    )
+
+    payload = output.read_text(encoding="utf-8")
+    assert '"hunter_count":' in payload
+    assert '"name": "sql_injection"' in payload
+    assert '"vulnerability_class": "CWE-89"' in payload
+    assert '"name": "command_injection"' in payload
+    assert '"rule_families":' in payload
+    assert '"default_enabled": true' in payload
+    assert '"experimental": true' in payload
 
 
 def test_format_research_summary_includes_artifact_paths():

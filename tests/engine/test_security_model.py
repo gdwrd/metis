@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import shutil
+import json
 
 import pytest
 
@@ -35,6 +36,7 @@ def test_project_security_model_builds_from_graph_and_persists(engine, tmp_path)
     assert any(entry.name == "db_execute" for entry in model.sinks)
     assert any(entry.name == "sanitize_name" for entry in model.sanitizers)
     assert any(entry.name == "route" for entry in model.frameworks)
+    assert model.metadata["graph_capability_fingerprint"]
     entrypoint = next(
         entry for entry in model.entrypoints if entry.name == "/projects/<project_id>"
     )
@@ -57,6 +59,24 @@ def test_project_security_model_uses_source_hash_before_changed_index_hash(
     assert first.project_root_hash == second.project_root_hash
     assert second.file_hashes[file_id] == _hash_file(repo / "app.py")
     assert second.file_hashes[file_id] != "hash-2"
+
+
+def test_project_security_model_cache_rebuilds_on_graph_capability_change(
+    engine,
+    tmp_path,
+):
+    repo, _file_id, _index = _write_fixture_repo(tmp_path, engine)
+    service = ProjectSecurityModelService(engine.repository)
+    first = service.load_or_build(repo)
+    model_path = repo / ".metis" / "security_model.json"
+    payload = json.loads(model_path.read_text(encoding="utf-8"))
+    payload["metadata"]["graph_capability_fingerprint"] = "stale-capabilities"
+    model_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    second = service.load_or_build(repo)
+
+    assert first.file_hashes == second.file_hashes
+    assert second.metadata["graph_capability_fingerprint"] != "stale-capabilities"
 
 
 def test_project_security_model_cache_is_scoped_to_requested_root(engine, tmp_path):

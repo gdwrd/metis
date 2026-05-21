@@ -10,7 +10,7 @@ class SystemVerilogPlugin(ConfigBackedLanguagePlugin):
     """Language plugin providing SystemVerilog-specific splitter and prompts."""
 
     NAME = "systemverilog"
-    DEFAULT_EXTENSIONS = [".sv", ".svh"]
+    DEFAULT_EXTENSIONS = [".sv", ".svh", ".sv.*", ".svh.*"]
     DEFAULT_TEST_PATH_PATTERNS = ["*_tb.sv", "*_tb.svh", "tb_*.sv"]
 
     def get_splitter(self):
@@ -22,3 +22,14 @@ class SystemVerilogPlugin(ConfigBackedLanguagePlugin):
             chunk_lines_overlap=splitting_cfg.get("chunk_lines_overlap"),
             max_chars=splitting_cfg.get("max_chars"),
         )
+
+    def get_function_node_types(self) -> dict[str, list[str]]:
+        return {
+            "function": [
+                "module_declaration",
+                "function_declaration",
+                "task_declaration",
+            ],
+            "call": ["subroutine_call", "system_tf_call"],
+            "name": ["name", "identifier"],
+        }

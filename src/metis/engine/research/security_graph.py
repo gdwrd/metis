@@ -26,189 +26,92 @@ from metis.engine.research.models import (
     SecurityGraphNode,
     SecurityTag,
 )
+from metis.engine.research.parser_inventory import (
+    CONFIG_GRAPH_EXTENSIONS,
+    CONFIG_GRAPH_PATTERNS,
+    runtime_language_for,
+)
+from metis.engine.research.rules import (
+    CONFIG_KEYWORDS,
+    GUARD_KEYWORDS,
+    SANITIZER_KEYWORDS,
+    SINK_KEYWORDS,
+    SOURCE_KEYWORDS,
+    VULNERABILITY_RULES,
+)
 
-GUARD_KEYWORDS = (
-    "require_",
-    "check_",
-    "authorize",
-    "permission",
-    "owner",
-    "tenant",
-    "admin",
-    "authenticated",
-    "login_required",
-    "jwt_required",
-    "policy",
-    "acl",
-    "privileged",
-    "secure_state",
-    "lifecycle",
-    "locked",
-    "authorized",
-    "allow_debug",
+GRAPH_METADATA_SOURCE = (
+    "function_index+python_ast+text+plugin_treesitter+config_resource"
 )
-SOURCE_KEYWORDS = (
-    "req",
-    "request",
-    "param",
-    "params",
-    "query",
-    "form",
-    "file",
-    "files",
-    "args",
-    "argv",
-    "stdin",
-    "$_get",
-    "$_post",
-    "$_request",
-    "$_cookie",
-    "@argv",
-    "$argv",
-    "input",
-    "environ",
-    "getenv",
-    "process.env",
-    "env",
-    "socket",
-    "network",
-    "http",
-    "url",
-    "uri",
-    "ipc",
-    "body",
-    "headers",
-    "cookie",
-    "cookies",
-    "msg.sender",
-    "msg.value",
-    "tx.origin",
-    "callback",
-    "work",
-    "thread",
-    "irq",
-    "interrupt",
-    "handler",
-    "bus_write",
-    "mmio",
-    "jtag",
-    "debug_req",
-    "strap",
-    "write_en",
-    "host_wdata",
-)
-SINK_KEYWORDS = (
-    "sql_query",
-    "query",
-    "queryrow",
-    "mysql_query",
-    "mysqli_query",
-    "pg_query",
-    "sqlite_query",
-    "pdo.query",
-    "pdo.exec",
-    "db.query",
-    "db.exec",
-    "dbh.do",
-    "execute",
-    "executemany",
-    "raw",
-    "system",
-    "check_output",
-    "popen",
-    "spawn",
-    "spawn_sync",
-    "child_process",
-    "function",
-    "eval",
-    "exec",
-    "execsync",
-    "shell_exec",
-    "passthru",
-    "proc_open",
-    "backticks",
-    "open",
-    "readfile",
-    "fopen",
-    "send_file",
-    "urlopen",
-    "requests.get",
-    "requests.post",
-    "fetch",
-    "http.get",
-    "http.post",
-    "axios.get",
-    "axios.post",
-    "pickle.loads",
-    "yaml.load",
-    "marshal.load",
-    "loads",
-    "deserialize",
-    "unserialize",
-    "memcpy",
-    "strncpy",
-    "strcpy",
-    "sprintf",
-    "free",
-    "kfree",
-    "delete",
-    "drop",
-    "destroy",
-    "release",
-    "register_write",
-    "write_reg",
-    "mmio_write",
-    "csr_write",
-    "privilege",
-    "debug_enable",
-    "call",
-    "delegatecall",
-    "staticcall",
-    "boot_key",
-    "seed",
-    "secret",
-    "key",
-    "fuse",
-    "otp",
-)
-SANITIZER_KEYWORDS = (
-    "sanitize",
-    "validate",
-    "escape",
-    "escapeshellarg",
-    "escapeshellcmd",
-    "htmlspecialchars",
-    "canonical",
-    "normalize",
-    "safe_join",
-    "allowlist",
-    "whitelist",
-    "parameterize",
-    "prepare",
-    "bind_param",
-    "bindvalue",
-    "quote",
-    "real_escape_string",
-    "intval",
-    "filter_input",
-    "parse_url",
-    "new_url",
-    "zeroize",
-    "memset_s",
-    "clear",
-)
-CONFIG_KEYWORDS = ("config", "settings", "environ", "getenv")
+GRAPH_CAPABILITY_VERSION = "parser_config_resource_v4"
+SCRIPT_ROUTE_EXCLUDED_SUFFIXES = (".inc", ".pm")
+ROUTE_DETECTOR_CAPABILITY = {
+    "version": 2,
+    "framework_registration_languages": (
+        "csharp",
+        "go",
+        "javascript",
+        "jsx",
+        "php",
+        "ruby",
+        "rust",
+        "tsx",
+        "typescript",
+    ),
+    "framework_annotation_languages": ("csharp", "java", "kotlin", "rust", "scala"),
+    "file_route_languages": ("javascript", "jsx", "tsx", "typescript"),
+    "script_route_languages": ("php", "perl"),
+    "script_route_excluded_suffixes": SCRIPT_ROUTE_EXCLUDED_SUFFIXES,
+    "detector_kinds": (
+        "file_route",
+        "framework_annotation",
+        "framework_dsl",
+        "framework_command",
+        "framework_minimal_api",
+        "framework_route",
+        "framework_signature",
+        "script_handler",
+        "server_script",
+    ),
+    "script_handler_languages": ("bash", "lua", "perl"),
+    "signature_route_languages": ("go", "java", "kotlin", "rust", "scala"),
+    "dsl_route_languages": ("ruby",),
+}
 TEXT_METADATA_EXTENSIONS = {
     ".c",
     ".h",
     ".cc",
     ".cpp",
+    ".cxx",
+    ".c++",
     ".hpp",
+    ".hh",
+    ".hxx",
+    ".ipp",
     ".rs",
     ".sv",
     ".svh",
     ".v",
     ".vh",
+    ".php",
+    ".phps",
+    ".phtm",
+    ".phtml",
+    ".phpt",
+    ".pht",
+    ".php2",
+    ".php3",
+    ".php4",
+    ".php5",
+    ".php6",
+    ".php7",
+    ".php8",
+    ".inc",
+    ".pl",
+    ".pm",
+    ".cgi",
+}
+SERVER_SCRIPT_TEXT_EXTENSIONS = {
     ".php",
     ".phps",
     ".phtm",
@@ -241,6 +144,8 @@ TEXT_CALL_EXCLUDE_NAMES = CONTROL_STATEMENT_NAMES | {
     "always",
     "assign",
 }
+CONFIG_METADATA_EXTENSIONS = CONFIG_GRAPH_EXTENSIONS
+CONFIG_METADATA_PATTERNS = CONFIG_GRAPH_PATTERNS
 
 
 @dataclass(frozen=True)
@@ -291,6 +196,7 @@ class SecurityGraphBuilder:
         root_path = self._root_path(root)
         function_index = self._repository.load_function_index() or FunctionIndex()
         current_hashes = self._current_file_hashes(function_index, root_path)
+        expected_metadata = self._graph_metadata(root_path)
         graph_path = Path(self._repository.get_security_graph_path())
         if not rebuild and graph_path.exists():
             try:
@@ -304,6 +210,8 @@ class SecurityGraphBuilder:
                 and graph.schema_version == SECURITY_GRAPH_SCHEMA_VERSION
                 and graph.analysis_root == str(root_path)
                 and graph.file_hashes == current_hashes
+                and graph.metadata.get("capability_fingerprint")
+                == expected_metadata["capability_fingerprint"]
             ):
                 return graph
         return self.build(
@@ -330,10 +238,12 @@ class SecurityGraphBuilder:
         python_metadata = self._scan_python_metadata(root_path, codebase_path)
         text_metadata = self._scan_text_metadata(root_path, codebase_path)
         plugin_metadata = self._scan_plugin_metadata(root_path, codebase_path)
+        config_metadata = self._scan_config_metadata(root_path, codebase_path)
         all_metadata = [
             *python_metadata.functions,
             *text_metadata.functions,
             *plugin_metadata.functions,
+            *config_metadata.functions,
         ]
         metadata_by_qname = {item.qualified_name: item for item in all_metadata}
 
@@ -376,6 +286,7 @@ class SecurityGraphBuilder:
         self._add_metadata_nodes_and_edges(nodes_by_id, edges, python_metadata)
         self._add_metadata_nodes_and_edges(nodes_by_id, edges, text_metadata)
         self._add_metadata_nodes_and_edges(nodes_by_id, edges, plugin_metadata)
+        self._add_metadata_nodes_and_edges(nodes_by_id, edges, config_metadata)
         graph = SecurityGraph(
             analysis_root=str(root_path),
             project_root_hash=_project_root_hash(current_hashes),
@@ -385,13 +296,18 @@ class SecurityGraphBuilder:
                 _dedupe_edges(edges),
                 key=lambda item: (item.source, item.kind, item.target),
             ),
-            metadata={
-                "source": "function_index+python_ast+text+plugin_treesitter",
-                "root": str(root_path),
-            },
+            metadata=self._graph_metadata(root_path),
         )
         self.write(graph)
         return graph
+
+    def _graph_metadata(self, root_path: Path) -> dict[str, Any]:
+        return {
+            "source": GRAPH_METADATA_SOURCE,
+            "root": str(root_path),
+            "capability_version": GRAPH_CAPABILITY_VERSION,
+            "capability_fingerprint": _graph_capability_fingerprint(self._repository),
+        }
 
     def write(self, graph: SecurityGraph) -> None:
         graph_path = Path(self._repository.get_security_graph_path())
@@ -433,6 +349,9 @@ class SecurityGraphBuilder:
         hash_extensions = sorted(
             set(self._repository.get_all_supported_code_extensions())
             | TEXT_METADATA_EXTENSIONS
+            | CONFIG_METADATA_EXTENSIONS
+            | CONFIG_METADATA_PATTERNS
+            | set(_repository_supported_path_patterns(self._repository))
         )
         for path in _iter_source_files(root_path, hash_extensions):
             file_id = _file_id_for_path(path, codebase_path)
@@ -541,12 +460,16 @@ class SecurityGraphBuilder:
     ) -> "_PythonMetadata":
         functions: list[_PythonFunctionMetadata] = []
         imports_by_file: dict[str, tuple[str, ...]] = {}
-        skipped_extensions = {".py"} | TEXT_METADATA_EXTENSIONS
+        skipped_extensions = {".py"} | (
+            TEXT_METADATA_EXTENSIONS - SERVER_SCRIPT_TEXT_EXTENSIONS
+        )
         for path in _iter_source_files(
             root_path,
-            self._repository.get_all_supported_code_extensions(),
+            _repository_supported_path_tokens(self._repository),
         ):
             if path.suffix.lower() in skipped_extensions:
+                continue
+            if _is_config_metadata_path(path):
                 continue
             plugin = self._repository.get_plugin_for_path(path.name)
             if plugin is None:
@@ -562,7 +485,9 @@ class SecurityGraphBuilder:
             file_id = _file_id_for_path(path, codebase_path)
             try:
                 source_text = path.read_text(encoding="utf-8", errors="ignore")
-                parsed = TreeSitterRuntime(language).parse_file(str(codebase_path), file_id)
+                parsed = TreeSitterRuntime(language).parse_file(
+                    str(codebase_path), file_id
+                )
             except (OSError, RuntimeError, UnicodeDecodeError, ValueError):
                 continue
             source = source_text.encode("utf-8", errors="ignore")
@@ -571,7 +496,9 @@ class SecurityGraphBuilder:
                 source,
                 analyzer_config,
             )
-            imports_by_file[file_id] = tuple(sorted(_text_imports(source_text, language)))
+            imports_by_file[file_id] = tuple(
+                sorted(_text_imports(source_text, language))
+            )
             used_qnames: set[str] = set()
             for variants in ast_index.functions.values():
                 for function in variants:
@@ -588,6 +515,15 @@ class SecurityGraphBuilder:
                         if check.symbol or check.detail
                     )
                     call_names.update(_generic_security_markers(body))
+                    route, route_decorator = _framework_route_for_function(
+                        file_id=file_id,
+                        language=language,
+                        source=source_text,
+                        body=body,
+                        signature=signature,
+                        symbol=function.name,
+                        line=function.line_start,
+                    )
                     qname = _dedup_text_qname(
                         file_id,
                         function.name,
@@ -602,16 +538,44 @@ class SecurityGraphBuilder:
                             line=function.line_start,
                             end_line=function.line_end,
                             decorators=(),
-                            route=None,
-                            route_decorator=None,
+                            route=route,
+                            route_decorator=route_decorator,
                             parameters=tuple(_text_parameters(signature)),
-                            returns=("value",) if re.search(r"\breturn\b", body) else (),
+                            returns=("value",)
+                            if re.search(r"\breturn\b", body)
+                            else (),
                             call_names=tuple(sorted(call_names)),
                             imports=(),
                             config_refs=tuple(sorted(_text_config_refs(body))),
                         )
                     )
         return _PythonMetadata(functions=functions, imports_by_file=imports_by_file)
+
+    def _scan_config_metadata(
+        self,
+        root_path: Path,
+        codebase_path: Path,
+    ) -> "_PythonMetadata":
+        functions: list[_PythonFunctionMetadata] = []
+        for path in _iter_source_files(
+            root_path,
+            sorted(CONFIG_METADATA_EXTENSIONS | CONFIG_METADATA_PATTERNS),
+        ):
+            if not _is_config_metadata_path(path):
+                continue
+            file_id = _file_id_for_path(path, codebase_path)
+            try:
+                source = path.read_text(encoding="utf-8", errors="ignore")
+            except (OSError, UnicodeDecodeError):
+                continue
+            functions.extend(
+                _config_nodes_for_file(
+                    file_id=file_id,
+                    source=source,
+                    language=_config_language_for_path(path),
+                )
+            )
+        return _PythonMetadata(functions=functions, imports_by_file={})
 
     def _node_from_entry(
         self,
@@ -719,10 +683,15 @@ class SecurityGraphBuilder:
                             SecurityTag(
                                 kind="entrypoint",
                                 value=metadata.route,
-                                detail="HTTP route registration",
+                                detail=_entrypoint_registration_detail(
+                                    metadata.route_decorator
+                                ),
                                 file=metadata.file_id,
                                 line=metadata.line,
                                 symbol=metadata.symbol,
+                                confidence=_route_detector_confidence(
+                                    metadata.route_decorator
+                                ),
                             )
                         ],
                         metadata={
@@ -732,6 +701,10 @@ class SecurityGraphBuilder:
                                 metadata.file_id,
                             ),
                             "decorator": metadata.route_decorator,
+                            "detector": metadata.route_decorator,
+                            "detector_confidence": _route_detector_confidence(
+                                metadata.route_decorator
+                            ),
                         },
                     ),
                 )
@@ -740,7 +713,13 @@ class SecurityGraphBuilder:
                         source=route_id,
                         target=source_id,
                         kind="framework_registration",
-                        metadata={"framework": "route"},
+                        metadata={
+                            "framework": metadata.route_decorator or "route",
+                            "detector": metadata.route_decorator,
+                            "detector_confidence": _route_detector_confidence(
+                                metadata.route_decorator
+                            ),
+                        },
                     )
                 )
             for import_name in metadata.imports:
@@ -777,7 +756,7 @@ class SecurityGraphBuilder:
                             SecurityTag(
                                 kind="source",
                                 value=config_ref,
-                                detail="configuration reference",
+                                detail="configuration reference; detector=config_reference",
                                 file=metadata.file_id,
                                 symbol=metadata.symbol,
                                 confidence=0.7,
@@ -822,7 +801,7 @@ def _text_language_for_path(path: Path) -> str:
         return "php"
     if suffix in {".pl", ".pm", ".cgi"}:
         return "perl"
-    if suffix in {".cc", ".cpp", ".hpp"}:
+    if suffix in {".cc", ".cpp", ".cxx", ".c++", ".hpp", ".hh", ".hxx", ".ipp"}:
         return "cpp"
     if suffix == ".rs":
         return "rust"
@@ -833,10 +812,142 @@ def _text_language_for_path(path: Path) -> str:
     return "c"
 
 
+def _is_config_metadata_path(path: Path) -> bool:
+    suffix = path.suffix.lower()
+    name = path.name.lower()
+    return suffix in CONFIG_METADATA_EXTENSIONS or name in CONFIG_METADATA_PATTERNS
+
+
+def _config_language_for_path(path: Path) -> str:
+    suffix = path.suffix.lower()
+    name = path.name.lower()
+    if name == "dockerfile" or suffix == ".dockerfile":
+        return "dockerfile"
+    if suffix in {".tf", ".tfvars", ".hcl"}:
+        return "terraform"
+    if suffix in {".yaml", ".yml"}:
+        return "yaml"
+    if suffix == ".json":
+        return "json"
+    return suffix.lstrip(".") or name
+
+
 def _parser_language_for_path(path: Path, plugin_name: str) -> str:
-    if path.suffix.lower() in {".jsx", ".tsx"}:
-        return "tsx"
-    return plugin_name
+    return runtime_language_for(plugin_name, path)
+
+
+def _repository_supported_path_tokens(repository) -> list[str]:
+    tokens = set(repository.get_all_supported_code_extensions())
+    tokens.update(_repository_supported_path_patterns(repository))
+    return sorted(tokens)
+
+
+def _repository_supported_path_patterns(repository) -> list[str]:
+    try:
+        return [
+            str(pattern).lower()
+            for pattern, _plugin in repository._config.ext_pattern_plugin_map
+        ]
+    except Exception:
+        return []
+
+
+def _graph_capability_fingerprint(repository) -> str:
+    payload = {
+        "capability_version": GRAPH_CAPABILITY_VERSION,
+        "source": GRAPH_METADATA_SOURCE,
+        "text_metadata_extensions": sorted(TEXT_METADATA_EXTENSIONS),
+        "server_script_text_extensions": sorted(SERVER_SCRIPT_TEXT_EXTENSIONS),
+        "config_metadata_extensions": sorted(CONFIG_METADATA_EXTENSIONS),
+        "config_metadata_patterns": sorted(CONFIG_METADATA_PATTERNS),
+        "route_detector": {
+            key: sorted(value) if isinstance(value, tuple) else value
+            for key, value in ROUTE_DETECTOR_CAPABILITY.items()
+        },
+        "plugins": _plugin_capability_payload(repository),
+        "rules": [
+            {
+                "family": rule.family,
+                "cwe": rule.cwe,
+                "source_markers": sorted(rule.source_markers),
+                "sink_markers": sorted(rule.sink_markers),
+                "sanitizer_markers": sorted(rule.sanitizer_markers),
+                "guard_markers": sorted(rule.guard_markers),
+                "languages": sorted(rule.languages),
+                "aliases": sorted(rule.aliases),
+            }
+            for rule in VULNERABILITY_RULES
+        ],
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    return sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def _plugin_capability_payload(repository) -> list[dict[str, Any]]:
+    plugins = _repository_plugins(repository)
+    payload: list[dict[str, Any]] = []
+    for plugin in sorted(plugins, key=lambda item: _safe_plugin_name(item)):
+        analyzer_config = _plugin_analyzer_config(plugin)
+        payload.append(
+            {
+                "name": _safe_plugin_name(plugin),
+                "extensions": _safe_plugin_extensions(plugin),
+                "analyzer_config": _ast_config_payload(analyzer_config),
+            }
+        )
+    return payload
+
+
+def _ast_config_payload(analyzer_config) -> dict[str, list[str]]:
+    return {
+        "function_node_types": sorted(analyzer_config.function_node_types),
+        "call_node_types": sorted(analyzer_config.call_node_types),
+        "name_fields": list(analyzer_config.name_fields),
+        "call_name_fields": list(analyzer_config.call_name_fields),
+        "definition_node_types": sorted(analyzer_config.definition_node_types),
+        "reference_node_types": sorted(analyzer_config.reference_node_types),
+        "parameter_node_types": sorted(analyzer_config.parameter_node_types),
+        "import_node_types": sorted(analyzer_config.import_node_types),
+        "return_node_types": sorted(analyzer_config.return_node_types),
+        "check_node_types": sorted(analyzer_config.check_node_types),
+        "condition_fields": list(analyzer_config.condition_fields),
+        "identifier_node_types": sorted(analyzer_config.identifier_node_types),
+    }
+
+
+def _repository_plugins(repository) -> list[Any]:
+    config = getattr(repository, "_config", None)
+    if config is None:
+        return []
+    plugins = []
+    seen: set[int] = set()
+    for plugin in list(getattr(config, "ext_plugin_map", {}).values()):
+        plugin_id = id(plugin)
+        if plugin_id in seen:
+            continue
+        seen.add(plugin_id)
+        plugins.append(plugin)
+    for _pattern, plugin in getattr(config, "ext_pattern_plugin_map", []):
+        plugin_id = id(plugin)
+        if plugin_id in seen:
+            continue
+        seen.add(plugin_id)
+        plugins.append(plugin)
+    return plugins
+
+
+def _safe_plugin_name(plugin) -> str:
+    try:
+        return str(plugin.get_name() or "").strip()
+    except Exception:
+        return ""
+
+
+def _safe_plugin_extensions(plugin) -> list[str]:
+    try:
+        return sorted(str(ext).lower() for ext in plugin.get_supported_extensions())
+    except Exception:
+        return []
 
 
 def _plugin_analyzer_config(plugin) -> Any:
@@ -866,7 +977,9 @@ def _text_imports(source: str, language: str) -> set[str]:
         ):
             imports.add(match.group(1))
     elif language == "perl":
-        for match in re.finditer(r"^\s*(?:use|require)\s+([A-Za-z_][\w:]*)", source, re.M):
+        for match in re.finditer(
+            r"^\s*(?:use|require)\s+([A-Za-z_][\w:]*)", source, re.M
+        ):
             imports.add(match.group(1))
     return imports
 
@@ -886,8 +999,9 @@ def _server_script_units_for_file(
     script_markers = tuple(sorted(_server_script_markers(script_source, language)))
     if functions and not script_markers:
         return functions
+    route = _script_entrypoint_route(file_id, language) if script_markers else None
     line_count = len(script_source.splitlines()) or 1
-    symbol = Path(file_id).stem or "script"
+    symbol = "__script__"
     script_metadata = _PythonFunctionMetadata(
         file_id=file_id,
         language=language,
@@ -895,8 +1009,8 @@ def _server_script_units_for_file(
         line=1,
         end_line=line_count,
         decorators=(),
-        route=None,
-        route_decorator=None,
+        route=route,
+        route_decorator="server_script" if route else None,
         parameters=(),
         returns=(),
         call_names=script_markers,
@@ -912,6 +1026,249 @@ def _server_script_runtime_source(source: str, language: str) -> str:
     if language == "perl":
         return source.split("\n__END__", 1)[0]
     return source
+
+
+def _script_entrypoint_route(file_id: str, language: str) -> str | None:
+    if language not in {"php", "perl"}:
+        return None
+    if Path(file_id).suffix.lower() in SCRIPT_ROUTE_EXCLUDED_SUFFIXES:
+        return None
+    path = "/" + file_id.strip().lstrip("./")
+    return path.replace("\\", "/")
+
+
+def _framework_route_for_function(
+    *,
+    file_id: str,
+    language: str,
+    source: str,
+    body: str,
+    signature: str,
+    symbol: str,
+    line: int,
+) -> tuple[str | None, str | None]:
+    language = str(language or "").lower()
+    route = _route_from_file_path(file_id, language, source, symbol)
+    if route:
+        return route, "file_route"
+
+    registered = _registered_route_for_symbol(source, symbol, language)
+    if registered:
+        return registered
+
+    annotated = _annotation_route_before_line(source, line, language)
+    if annotated:
+        return annotated
+
+    dsl = _dsl_route_for_symbol(source, body, signature, symbol, language)
+    if dsl:
+        return dsl
+
+    return None, None
+
+
+def _route_from_file_path(
+    file_id: str,
+    language: str,
+    source: str,
+    symbol: str,
+) -> str | None:
+    normalized = file_id.replace("\\", "/")
+    if language not in {"javascript", "typescript", "tsx", "jsx"}:
+        return None
+    marker = "/pages/api/"
+    if marker not in f"/{normalized}":
+        return None
+    if not _is_file_route_handler(symbol, source):
+        return None
+    route = "/" + f"/{normalized}".split(marker, 1)[1]
+    route = re.sub(r"\.(?:jsx?|tsx?)$", "", route)
+    route = re.sub(r"/index$", "", route)
+    route = re.sub(r"\[([^\]]+)\]", r":\1", route)
+    return route or "/"
+
+
+def _is_file_route_handler(symbol: str, source: str) -> bool:
+    if not symbol:
+        return False
+    escaped = re.escape(symbol)
+    export_patterns = (
+        rf"\bexport\s+default\s+(?:async\s+)?function\s+{escaped}\b",
+        rf"\bexport\s+default\s+{escaped}\b",
+        rf"\bmodule\.exports\s*=\s*{escaped}\b",
+        rf"\bexports\.default\s*=\s*{escaped}\b",
+    )
+    return any(re.search(pattern, source) for pattern in export_patterns)
+
+
+def _registered_route_for_symbol(
+    source: str,
+    symbol: str,
+    language: str,
+) -> tuple[str, str] | None:
+    if not symbol:
+        return None
+    escaped = re.escape(symbol)
+    quote_route = r"['\"]([^'\"]+)['\"]"
+    if language in {"javascript", "typescript", "tsx", "jsx"}:
+        patterns: tuple[str, ...] = (
+            rf"\b(?:app|router|server|fastify)\s*\.\s*"
+            rf"(get|post|put|patch|delete|all|use)\s*\(\s*{quote_route}"
+            rf"\s*,[^)]*\b{escaped}\b",
+            rf"\bfastify\s*\.\s*route\s*\(\s*\{{[^}}]*\burl\s*:\s*{quote_route}"
+            rf"[^}}]*\bhandler\s*:\s*{escaped}\b",
+            rf"\b(?:app|router)\s*\.\s*use\s*\(\s*{quote_route}"
+            rf"\s*,[^)]*\b{escaped}\b",
+        )
+    elif language == "go":
+        patterns = (
+            rf"\b(?:http\.)?HandleFunc\s*\(\s*{quote_route}\s*,\s*{escaped}\b",
+            rf"\.\s*(GET|POST|PUT|PATCH|DELETE|Any|Handle)\s*\(\s*{quote_route}"
+            rf"\s*,\s*{escaped}\b",
+        )
+    elif language == "csharp":
+        patterns = (
+            rf"\bMap(?:Get|Post|Put|Patch|Delete|Methods)\s*\(\s*{quote_route}"
+            rf"\s*,[^)]*\b{escaped}\b",
+        )
+    elif language == "rust":
+        patterns = (
+            rf"\.route\s*\(\s*{quote_route}\s*,\s*(?:get|post|put|patch|delete|any)"
+            rf"\s*\(\s*{escaped}\s*\)",
+        )
+    elif language in {"php", "ruby"}:
+        patterns = (
+            rf"\b(?:get|post|put|patch|delete|match)\s*\(?\s*{quote_route}"
+            rf"[^)\n]*\b{escaped}\b",
+            rf"\b(?:get|post|put|patch|delete)\s+{quote_route}"
+            rf"[^#\n]*#\s*{escaped}\b",
+            rf"['\"](?:GET|POST|PUT|PATCH|DELETE)\s+([^'\"]+)['\"]\s*=>"
+            rf"[^;\n]*['\"]{escaped}['\"]",
+        )
+    else:
+        return None
+    for pattern in patterns:
+        match = re.search(pattern, source, re.I | re.S)
+        if not match:
+            continue
+        route = next(
+            (group for group in match.groups() if group and group.startswith("/")),
+            None,
+        )
+        if route:
+            detector = (
+                "framework_minimal_api" if language == "csharp" else "framework_route"
+            )
+            return route, detector
+    return None
+
+
+def _annotation_route_before_line(
+    source: str,
+    line: int,
+    language: str,
+) -> tuple[str, str] | None:
+    prefix = _adjacent_annotation_block(source, line)
+    if language in {"javascript", "typescript", "tsx", "jsx"}:
+        patterns: tuple[str, ...] = (
+            r"@\s*(?:Get|Post|Put|Patch|Delete|All)\s*\(\s*['\"]([^'\"]+)['\"]",
+        )
+    elif language in {"java", "kotlin", "scala"}:
+        patterns: tuple[str, ...] = (
+            r"@\s*(?:GetMapping|PostMapping|PutMapping|PatchMapping|DeleteMapping|RequestMapping|Path)\s*\(\s*(?:value\s*=\s*)?['\"]([^'\"]+)['\"]",
+            r"@\s*(?:GetMapping|PostMapping|PutMapping|PatchMapping|DeleteMapping|RequestMapping|Path)\s*\(\s*path\s*=\s*['\"]([^'\"]+)['\"]",
+        )
+    elif language == "csharp":
+        patterns = (
+            r"\[\s*(?:HttpGet|HttpPost|HttpPut|HttpPatch|HttpDelete|Route)\s*\(\s*['\"]([^'\"]+)['\"]",
+        )
+    elif language == "rust":
+        patterns = (
+            r"#\s*\[\s*(?:get|post|put|patch|delete|route)\s*\(\s*['\"]([^'\"]+)['\"]",
+        )
+    else:
+        return None
+    for pattern in patterns:
+        matches = list(re.finditer(pattern, prefix, re.I | re.S))
+        if not matches:
+            continue
+        route = matches[-1].group(1)
+        return _normalize_route(route), "framework_annotation"
+    return None
+
+
+def _adjacent_annotation_block(source: str, line: int) -> str:
+    lines = source.splitlines()
+    if not lines:
+        return ""
+    idx = min(max(line - 1, 0), len(lines) - 1)
+    start = idx
+    while start > 0 and _is_annotation_context_line(lines[start - 1]):
+        start -= 1
+    end = idx
+    if _is_annotation_context_line(lines[idx]):
+        while end + 1 < len(lines) and _is_annotation_context_line(lines[end + 1]):
+            end += 1
+    return "\n".join(lines[start : end + 1])
+
+
+def _is_annotation_context_line(line: str) -> bool:
+    stripped = line.strip()
+    if not stripped:
+        return True
+    if stripped.startswith(("@", "[", "#[", "//", "/*", "*")):
+        return True
+    return False
+
+
+def _dsl_route_for_symbol(
+    source: str,
+    body: str,
+    signature: str,
+    symbol: str,
+    language: str,
+) -> tuple[str, str] | None:
+    if language == "ruby":
+        match = re.search(
+            r"\b(?:get|post|put|patch|delete)\s+['\"]([^'\"]+)['\"]", body
+        )
+        if match:
+            return _normalize_route(match.group(1)), "framework_dsl"
+        match = re.search(
+            rf"\b(?:get|post|put|patch|delete)\s+['\"]([^'\"]+)['\"]"
+            rf"\s*(?:\n\s*)+def\s+{re.escape(symbol)}\b",
+            source,
+        )
+        if match:
+            return _normalize_route(match.group(1)), "framework_dsl"
+    if language == "go" and (
+        "cobra.Command" in body
+        or "cobra.Command" in signature
+        or re.search(r"\bRunE?\s*:", body)
+    ):
+        return f"/{symbol}", "framework_command"
+    if language in {"java", "kotlin", "scala"} and (
+        symbol.lower() in {"doget", "dopost", "doput", "dodelete", "service"}
+        or "HttpServletRequest" in signature
+        or "HttpServletRequest" in body
+    ):
+        return f"/{symbol}", "framework_signature"
+    if language == "rust" and re.search(r"\b(?:Json|Query|Path)\s*<", signature):
+        return f"/{symbol}", "framework_signature"
+    if language in {"bash", "lua", "perl"} and _matching_source_values(
+        tuple(_generic_security_markers(body))
+    ):
+        return f"/{symbol}", "script_handler"
+    return None
+
+
+def _normalize_route(route: str) -> str:
+    cleaned = str(route or "").strip()
+    if not cleaned:
+        return "/"
+    if not cleaned.startswith("/"):
+        return "/" + cleaned
+    return cleaned
 
 
 def _server_script_functions_for_file(
@@ -950,6 +1307,10 @@ def _server_script_functions_for_file(
             body = _slice_lines(source, line, end_line)
             parameters = ()
         qname = _dedup_text_qname(file_id, symbol, line, used_qnames)
+        script_has_sources = bool(_server_script_markers(body, language))
+        route = (
+            _script_entrypoint_route(file_id, language) if script_has_sources else None
+        )
         functions.append(
             _PythonFunctionMetadata(
                 file_id=qname.rsplit("::", 1)[0],
@@ -958,8 +1319,8 @@ def _server_script_functions_for_file(
                 line=line,
                 end_line=end_line,
                 decorators=(),
-                route=None,
-                route_decorator=None,
+                route=route,
+                route_decorator="server_script" if route else None,
                 parameters=parameters,
                 returns=("value",) if re.search(r"\breturn\b", body) else (),
                 call_names=tuple(sorted(_server_script_markers(body, language))),
@@ -978,7 +1339,7 @@ def _text_functions_for_file(
 ) -> list[_PythonFunctionMetadata]:
     if language == "rust":
         pattern = re.compile(
-            r"(?m)^\s*(?:pub\s+)?(?:unsafe\s+)?fn\s+([A-Za-z_]\w*)\s*\("
+            r"(?m)^\s*(?:pub\s+)?(?:async\s+)?(?:unsafe\s+)?fn\s+([A-Za-z_]\w*)\s*\("
         )
     else:
         pattern = re.compile(
@@ -994,6 +1355,15 @@ def _text_functions_for_file(
         end_line = _brace_end_line(source, match.end() - 1)
         body = _slice_lines(source, line, end_line)
         signature = source[match.start() : match.end()].split("{", 1)[0].strip()
+        route, route_decorator = _framework_route_for_function(
+            file_id=file_id,
+            language=language,
+            source=source,
+            body=body,
+            signature=signature,
+            symbol=symbol,
+            line=line,
+        )
         qname = _dedup_text_qname(file_id, symbol, line, used_qnames)
         metadata = _PythonFunctionMetadata(
             file_id=qname.rsplit("::", 1)[0],
@@ -1002,8 +1372,8 @@ def _text_functions_for_file(
             line=line,
             end_line=end_line,
             decorators=(),
-            route=None,
-            route_decorator=None,
+            route=route,
+            route_decorator=route_decorator,
             parameters=tuple(_text_parameters(signature)),
             returns=("value",) if re.search(r"\breturn\b", body) else (),
             call_names=tuple(sorted(_text_call_names(body))),
@@ -1054,6 +1424,128 @@ def _systemverilog_modules_for_file(
             )
         )
     return modules
+
+
+def _config_nodes_for_file(
+    *,
+    file_id: str,
+    source: str,
+    language: str,
+) -> list[_PythonFunctionMetadata]:
+    if language == "terraform":
+        nodes = _terraform_config_nodes(file_id, source, language)
+        if nodes:
+            return nodes
+    if language == "dockerfile":
+        nodes = _dockerfile_config_nodes(file_id, source, language)
+        if nodes:
+            return nodes
+    symbol = Path(file_id).name or "config"
+    return [
+        _PythonFunctionMetadata(
+            file_id=file_id,
+            language=language,
+            symbol=symbol,
+            line=1,
+            end_line=len(source.splitlines()) or 1,
+            decorators=(),
+            route=None,
+            route_decorator=None,
+            parameters=(),
+            returns=(),
+            call_names=tuple(sorted(_config_security_markers(source, language))),
+            imports=(),
+            config_refs=tuple(sorted(_text_config_refs(source))),
+            node_type="config",
+        )
+    ]
+
+
+def _terraform_config_nodes(
+    file_id: str,
+    source: str,
+    language: str,
+) -> list[_PythonFunctionMetadata]:
+    nodes: list[_PythonFunctionMetadata] = []
+    used_qnames: set[str] = set()
+    block_pattern = re.compile(
+        r'(?m)^\s*(resource|data|module)\s+"([^"]+)"(?:\s+"([^"]+)")?\s*\{'
+    )
+    matches = list(block_pattern.finditer(source))
+    for index, match in enumerate(matches):
+        block_kind = match.group(1)
+        block_type = match.group(2)
+        block_name = match.group(3) or block_type
+        symbol = (
+            f"{block_type}.{block_name}"
+            if block_kind in {"resource", "data"}
+            else f"module.{block_name}"
+        )
+        line = _line_number_for_offset(source, match.start())
+        end_line = _brace_end_line(source, match.end() - 1)
+        if index + 1 < len(matches):
+            next_line = _line_number_for_offset(source, matches[index + 1].start())
+            end_line = min(end_line, max(line, next_line - 1))
+        body = _slice_lines(source, line, end_line)
+        qname = _dedup_text_qname(file_id, symbol, line, used_qnames)
+        nodes.append(
+            _PythonFunctionMetadata(
+                file_id=qname.rsplit("::", 1)[0],
+                language=language,
+                symbol=qname.rsplit("::", 1)[-1].split("@", 1)[0],
+                line=line,
+                end_line=end_line,
+                decorators=(),
+                route=None,
+                route_decorator=None,
+                parameters=(block_kind, block_type),
+                returns=(),
+                call_names=tuple(sorted(_config_security_markers(body, language))),
+                imports=(),
+                config_refs=tuple(sorted(_text_config_refs(body))),
+                node_type="resource"
+                if block_kind in {"resource", "data"}
+                else "config",
+            )
+        )
+    return nodes
+
+
+def _dockerfile_config_nodes(
+    file_id: str,
+    source: str,
+    language: str,
+) -> list[_PythonFunctionMetadata]:
+    nodes: list[_PythonFunctionMetadata] = []
+    used_qnames: set[str] = set()
+    for line_no, raw_line in enumerate(source.splitlines(), start=1):
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        instruction = line.split(None, 1)[0].upper()
+        if instruction not in {"RUN", "CMD", "ENTRYPOINT", "ENV", "USER", "EXPOSE"}:
+            continue
+        symbol = f"{instruction.lower()}_{line_no}"
+        qname = _dedup_text_qname(file_id, symbol, line_no, used_qnames)
+        nodes.append(
+            _PythonFunctionMetadata(
+                file_id=qname.rsplit("::", 1)[0],
+                language=language,
+                symbol=qname.rsplit("::", 1)[-1].split("@", 1)[0],
+                line=line_no,
+                end_line=line_no,
+                decorators=(),
+                route=None,
+                route_decorator=None,
+                parameters=(instruction,),
+                returns=(),
+                call_names=tuple(sorted(_config_security_markers(line, language))),
+                imports=(),
+                config_refs=tuple(sorted(_text_config_refs(line))),
+                node_type="config",
+            )
+        )
+    return nodes
 
 
 def _dedup_text_qname(
@@ -1134,7 +1626,9 @@ def _text_call_names(body: str) -> set[str]:
 def _server_script_markers(body: str, language: str) -> set[str]:
     names: set[str] = set()
     if language == "php":
-        for match in re.finditer(r"\$_(?:GET|POST|REQUEST|COOKIE|SERVER)\b", body, re.I):
+        for match in re.finditer(
+            r"\$_(?:GET|POST|REQUEST|COOKIE|SERVER)\b", body, re.I
+        ):
             names.add(match.group(0))
         for match in re.finditer(r"\$([A-Za-z_]\w*)\s*->\s*([A-Za-z_]\w*)\s*\(", body):
             receiver = match.group(1).lower()
@@ -1150,7 +1644,12 @@ def _server_script_markers(body: str, language: str) -> set[str]:
             re.I,
         ):
             names.add(match.group(1))
-        if re.search(r"\b(?:mysql_query|mysqli_query|pg_query|sqlite_query)\s*\(", body, re.I):
+        for marker in SANITIZER_KEYWORDS:
+            if _body_matches_marker(body.lower(), marker.lower(), source=False):
+                names.add(marker)
+        if re.search(
+            r"\b(?:mysql_query|mysqli_query|pg_query|sqlite_query)\s*\(", body, re.I
+        ):
             names.add("sql_query")
         return names
 
@@ -1166,6 +1665,9 @@ def _server_script_markers(body: str, language: str) -> set[str]:
             names.add("sql_query")
     for match in re.finditer(r"\b(system|open|opendir|exec|eval)\s*\(", body, re.I):
         names.add(match.group(1))
+    for marker in SANITIZER_KEYWORDS:
+        if _body_matches_marker(body.lower(), marker.lower(), source=False):
+            names.add(marker)
     if re.search(r"`[^`]+`|\bqx\s*[/({]", body):
         names.add("exec")
     return names
@@ -1175,15 +1677,110 @@ def _generic_security_markers(body: str) -> set[str]:
     markers: set[str] = set()
     lowered = body.lower()
     for keyword in SOURCE_KEYWORDS + SINK_KEYWORDS + SANITIZER_KEYWORDS:
-        normalized = keyword.lower()
-        if normalized == "function":
+        if keyword.lower() == "function":
             continue
-        if "." in normalized or "$" in normalized:
-            if normalized in lowered:
-                markers.add(keyword)
-            continue
-        if re.search(rf"\b{re.escape(normalized)}\b", lowered):
+        if _body_matches_marker(lowered, keyword, source=False):
             markers.add(keyword)
+    return markers
+
+
+def _body_matches_marker(lowered_body: str, marker: str, *, source: bool) -> bool:
+    marker_lower = str(marker or "").lower()
+    if not marker_lower:
+        return False
+    for pattern in _marker_body_patterns(marker_lower, source=source):
+        if re.search(pattern, lowered_body, re.I):
+            return True
+    return False
+
+
+def _marker_body_patterns(marker: str, *, source: bool) -> tuple[str, ...]:
+    escaped = re.escape(marker)
+    special_patterns = {
+        "child_process.exec": (r"\bchild_process\s*\.\s*exec\s*\(",),
+        "child_process.execfile": (r"\bchild_process\s*\.\s*execfile\s*\(",),
+        "child_process.spawn": (r"\bchild_process\s*\.\s*spawn\s*\(",),
+        "runtime.exec": (
+            r"\bruntime\s*\.\s*getruntime\s*\(\s*\)\s*\.\s*exec\s*\(",
+            r"\bruntime\s*\.\s*exec\s*\(",
+        ),
+        "getruntime().exec": (r"\bgetruntime\s*\(\s*\)\s*\.\s*exec\s*\(",),
+        "process.start": (r"\bprocess\s*\.\s*start\s*\(",),
+        "system.diagnostics.process.start": (
+            r"\bsystem\s*\.\s*diagnostics\s*\.\s*process\s*\.\s*start\s*\(",
+        ),
+        "exec.command": (r"\bexec\s*\.\s*command(?:context)?\s*\(",),
+        "exec.commandcontext": (r"\bexec\s*\.\s*commandcontext\s*\(",),
+        "command::new": (r"\bcommand\s*::\s*new\s*\(",),
+        "std::process::command": (
+            r"\bstd\s*::\s*process\s*::\s*command\s*::\s*new\s*\(",
+        ),
+        "vm.runin": (r"\bvm\s*\.\s*runin\w*\s*\(",),
+        "method.invoke": (r"\bmethod\s*\.\s*invoke\s*\(",),
+        "assembly.load": (r"\bassembly\s*\.\s*load\w*\s*\(",),
+        "class.forname": (r"\bclass\s*\.\s*forname\s*\(",),
+        "pdo::query": (r"\bpdo\s*::\s*query\s*\(",),
+        "pdo.query": (r"\bpdo\s*->\s*query\s*\(", r"\bpdo\s*\.\s*query\s*\("),
+        "pdo.exec": (r"\bpdo\s*->\s*exec\s*\(", r"\bpdo\s*\.\s*exec\s*\("),
+        "db.query": (r"\bdb\s*(?:\.|->)\s*query\s*\(",),
+        "db.exec": (r"\bdb\s*(?:\.|->)\s*exec\s*\(",),
+        "db.raw": (r"\bdb\s*(?:\.|->)\s*raw\s*\(",),
+        "dbh.do": (r"\bdbh\s*(?:\.|->)\s*do\s*\(",),
+        "statement.execute": (r"\bstatement\s*\.\s*execute\w*\s*\(",),
+        "statement.executequery": (r"\bstatement\s*\.\s*executequery\s*\(",),
+        "statement.executeupdate": (r"\bstatement\s*\.\s*executeupdate\s*\(",),
+        "parameters.add": (r"\bparameters\s*\.\s*add(?:withvalue)?\s*\(",),
+        "parameters.addwithvalue": (r"\bparameters\s*\.\s*addwithvalue\s*\(",),
+        "command.parameters": (r"\bcommand\s*\.\s*parameters\b",),
+        "activerecord.sanitize_sql": (r"\bactive_?record\s*\.\s*sanitize_sql\w*\s*\(",),
+    }
+    if marker in special_patterns:
+        return special_patterns[marker]
+    if source and marker in {"$_get", "$_post", "$_request", "$_cookie"}:
+        return (escaped,)
+    if source and marker in {"@argv", "$argv"}:
+        return (r"[@$]argv\b|\$argv\s*\[",)
+    if any(not char.isalnum() and char != "_" for char in marker):
+        return (escaped,)
+    return (rf"(?<![a-z0-9_]){escaped}(?![a-z0-9_])",)
+
+
+def _config_security_markers(body: str, language: str) -> set[str]:
+    markers = _generic_security_markers(body)
+    lowered = body.lower()
+    if language == "terraform":
+        markers.update({"config", "network", "resource"})
+        if "ingress" in lowered:
+            markers.add("ingress")
+        if "cidr" in lowered:
+            markers.add("cidr")
+        if "principal" in lowered:
+            markers.add("principal")
+        if "policy" in lowered:
+            markers.add("policy")
+        if "0.0.0.0/0" in lowered or "::/0" in lowered:
+            markers.update({"public", "network"})
+        if "aws_security_group" in lowered or "ingress" in lowered:
+            markers.add("security_group")
+    elif language == "dockerfile":
+        markers.add("config")
+        if re.search(r"\b(curl|wget|bash|sh|apk|apt-get|pip|npm)\b", lowered):
+            markers.update({"exec", "sh -c"})
+        if re.search(r"\bexpose\b", lowered):
+            markers.update({"network", "public", "exposed_port"})
+        if re.search(r"\broot\b|user\s+0\b", lowered):
+            markers.add("root")
+        if re.search(r"\bsecret|token|password|key\b", lowered):
+            markers.add("env")
+    elif language in {"yaml", "json"}:
+        markers.add("config")
+        if re.search(r"\b(secret|token|password|api[_-]?key|private_key)\b", lowered):
+            markers.add("env")
+        if re.search(
+            r"\b(public|0\.0\.0\.0/0|::/0|privileged|listen|port|ports|ingress)\b",
+            lowered,
+        ):
+            markers.update({"network", "public"})
     return markers
 
 
@@ -1224,12 +1821,73 @@ def _function_metadata(
                 else None
             ),
             "route_decorator": metadata.route_decorator,
+            "route_detector": metadata.route_decorator,
+            "route_detector_confidence": _route_detector_confidence(
+                metadata.route_decorator
+            )
+            if metadata.route
+            else None,
             "guards": list(metadata.guards),
             "imports": list(metadata.imports),
             "config_refs": list(metadata.config_refs),
         }
     )
     return result
+
+
+def _entrypoint_registration_detail(route_decorator: str | None) -> str:
+    detector = _detector_detail_suffix(route_decorator)
+    if route_decorator in {"server_script", "script_handler"}:
+        return f"Script entrypoint registration{detector}"
+    if route_decorator == "file_route":
+        return f"File-based route registration{detector}"
+    if route_decorator == "framework_annotation":
+        return f"Annotated framework route registration{detector}"
+    if route_decorator == "framework_command":
+        return f"Framework command registration{detector}"
+    if route_decorator == "framework_minimal_api":
+        return f"Minimal API route registration{detector}"
+    if route_decorator == "framework_signature":
+        return f"Framework signature route registration{detector}"
+    return f"Framework route registration{detector}"
+
+
+def _entrypoint_handler_detail(route_decorator: str | None) -> str:
+    detector = _detector_detail_suffix(route_decorator)
+    if route_decorator in {"server_script", "script_handler"}:
+        return f"Script entrypoint handler{detector}"
+    if route_decorator == "file_route":
+        return f"File-based route handler{detector}"
+    if route_decorator == "framework_annotation":
+        return f"Annotated framework route handler{detector}"
+    if route_decorator == "framework_command":
+        return f"Framework command handler{detector}"
+    if route_decorator == "framework_minimal_api":
+        return f"Minimal API route handler{detector}"
+    if route_decorator == "framework_signature":
+        return f"Framework signature route handler{detector}"
+    return f"Framework route handler{detector}"
+
+
+def _detector_detail_suffix(route_decorator: str | None) -> str:
+    if not route_decorator:
+        return ""
+    confidence = _route_detector_confidence(route_decorator)
+    return f"; detector={route_decorator}; confidence={confidence:.2f}"
+
+
+def _route_detector_confidence(route_decorator: str | None) -> float:
+    return {
+        "file_route": 0.95,
+        "framework_annotation": 0.9,
+        "framework_minimal_api": 0.9,
+        "framework_route": 0.9,
+        "server_script": 0.85,
+        "framework_command": 0.75,
+        "framework_dsl": 0.75,
+        "framework_signature": 0.75,
+        "script_handler": 0.75,
+    }.get(str(route_decorator or ""), 0.7)
 
 
 def _security_tags_for_function(
@@ -1255,10 +1913,11 @@ def _security_tags_for_function(
             SecurityTag(
                 kind="entrypoint",
                 value=metadata.route,
-                detail="HTTP route handler",
+                detail=_entrypoint_handler_detail(metadata.route_decorator),
                 file=file,
                 line=line,
                 symbol=symbol,
+                confidence=_route_detector_confidence(metadata.route_decorator),
             )
         )
         tags.append(
@@ -1269,6 +1928,7 @@ def _security_tags_for_function(
                 file=file,
                 line=line,
                 symbol=symbol,
+                confidence=_route_detector_confidence(metadata.route_decorator),
             )
         )
     for value in _matching_source_values(behavior_items):
@@ -1276,7 +1936,7 @@ def _security_tags_for_function(
             SecurityTag(
                 kind="source",
                 value=value,
-                detail="heuristic source marker",
+                detail="heuristic source marker; detector=source_marker",
                 file=file,
                 line=line,
                 symbol=symbol,
@@ -1284,11 +1944,13 @@ def _security_tags_for_function(
             )
         )
     for value in _matching_values(behavior_items, SINK_KEYWORDS):
+        if _is_namespace_only_sink(value, metadata):
+            continue
         tags.append(
             SecurityTag(
                 kind="sink",
                 value=value,
-                detail="heuristic sink marker",
+                detail="heuristic sink marker; detector=sink_marker",
                 file=file,
                 line=line,
                 symbol=symbol,
@@ -1302,7 +1964,7 @@ def _security_tags_for_function(
             SecurityTag(
                 kind="guard",
                 value=_normalized_name(value),
-                detail="heuristic guard marker",
+                detail="heuristic guard marker; detector=guard_marker",
                 file=file,
                 line=line,
                 symbol=symbol,
@@ -1314,7 +1976,7 @@ def _security_tags_for_function(
             SecurityTag(
                 kind="sanitizer",
                 value=_normalized_name(value),
-                detail="heuristic sanitizer marker",
+                detail="heuristic sanitizer marker; detector=sanitizer_marker",
                 file=file,
                 line=line,
                 symbol=symbol,
@@ -1322,6 +1984,15 @@ def _security_tags_for_function(
             )
         )
     return _dedupe_tags(tags)
+
+
+def _is_namespace_only_sink(
+    value: str,
+    metadata: _PythonFunctionMetadata | None,
+) -> bool:
+    if metadata is None:
+        return False
+    return metadata.language == "csharp" and value == "System"
 
 
 def _matching_values(values: list[str] | tuple[str, ...], keywords: tuple[str, ...]):
@@ -1342,20 +2013,58 @@ def _matching_source_values(values: list[str] | tuple[str, ...]) -> list[str]:
 
 def _matches_keyword(value: str | None, keywords: tuple[str, ...]) -> bool:
     lowered = str(value or "").lower()
-    return any(keyword in lowered for keyword in keywords)
+    for keyword in keywords:
+        if _value_matches_marker(lowered, keyword):
+            return True
+    return False
 
 
 def _matches_source_keyword(value: str | None) -> bool:
     lowered = str(value or "").lower()
     for keyword in SOURCE_KEYWORDS:
-        normalized = keyword.lower()
-        if any(char in normalized for char in ".$@"):
-            if normalized in lowered:
-                return True
-            continue
-        if re.search(rf"(?<![A-Za-z0-9_]){re.escape(normalized)}(?![A-Za-z0-9_])", lowered):
+        if _value_matches_marker(lowered, keyword):
             return True
     return False
+
+
+def _value_matches_marker(value: str, marker: str) -> bool:
+    marker_lower = str(marker or "").lower()
+    if not marker_lower:
+        return False
+    if value == marker_lower or value.endswith(f".{marker_lower}"):
+        return True
+    if _is_prefix_marker(marker_lower) and value.startswith(marker_lower):
+        return True
+    if re.search(rf"(?:^|[._-]){re.escape(marker_lower)}(?:$|[._-])", value):
+        return True
+    if _normalized_name(value) == marker_lower:
+        return True
+    if any(not char.isalnum() and char not in "._" for char in marker_lower):
+        return marker_lower in value
+    return bool(
+        re.search(
+            rf"(?<![a-z0-9_]){re.escape(marker_lower)}(?![a-z0-9_])",
+            value,
+        )
+    )
+
+
+def _is_prefix_marker(marker: str) -> bool:
+    return marker in {
+        "allowlist",
+        "authorize",
+        "canonical",
+        "check_",
+        "escape",
+        "normalize",
+        "parameterize",
+        "prepare",
+        "require_",
+        "sanitize",
+        "schema",
+        "validate",
+        "whitelist",
+    }
 
 
 def _dedupe_tags(tags: list[SecurityTag]) -> list[SecurityTag]:
@@ -1390,9 +2099,24 @@ def _iter_source_files(root: Path, supported_exts: list[str]) -> list[Path]:
     for path in root.rglob("*"):
         if not path.is_file() or ".metis" in path.parts:
             continue
-        if path.suffix.lower() in supported:
+        if _matches_supported_source_path(path, supported):
             result.append(path)
     return sorted(result)
+
+
+def _matches_supported_source_path(path: Path, supported: set[str]) -> bool:
+    suffix = path.suffix.lower()
+    name = path.name.lower()
+    if suffix in supported or name in supported:
+        return True
+    for token in supported:
+        if "*" not in token:
+            continue
+        if token.count("*") != 1 or not token.endswith("*"):
+            continue
+        if token[:-1] in name:
+            return True
+    return False
 
 
 def _hash_file(path: Path) -> str:

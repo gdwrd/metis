@@ -23,6 +23,7 @@ class ExpectedHypothesis:
     hunter: str
     vulnerability_class: str
     status: str
+    sarif_rule_id: str | None = None
     file: str | None = None
     line_range: tuple[int, int] | None = None
     symbol: str | None = None
@@ -37,6 +38,21 @@ class VariantSources:
 
     def any(self) -> bool:
         return any((self.from_fix, self.from_sarif, self.from_report))
+
+
+@dataclass(frozen=True)
+class CoverageMatrixEntry:
+    language: str
+    parser_runtime: str
+    graph_mode: str
+    vulnerability_class: str
+    hunter: str
+    source_coverage: str
+    sink_coverage: str
+    mitigation_coverage: str
+    fixture_status: str
+    default_status: str
+    experimental_status: str
 
 
 @dataclass(frozen=True)
@@ -61,6 +77,7 @@ class BenchmarkManifest:
     cases: tuple[BenchmarkCase, ...]
     line_tolerance: int = 0
     cwe_equivalence: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    coverage_matrix: tuple[CoverageMatrixEntry, ...] = ()
 
     @property
     def root(self) -> Path:
@@ -96,6 +113,10 @@ def load_manifest(path: str | Path) -> BenchmarkManifest:
         cases=cases,
         line_tolerance=int(settings.get("line_tolerance", 0) or 0),
         cwe_equivalence=_parse_cwe_equivalence(settings.get("cwe_equivalence", {})),
+        coverage_matrix=tuple(
+            _parse_coverage_matrix_entry(raw)
+            for raw in settings.get("coverage_matrix", []) or []
+        ),
     )
 
 
@@ -167,6 +188,9 @@ def _parse_expected_hypothesis(item: Any) -> ExpectedHypothesis:
             item.get("vulnerability_class") or item.get("cwe") or "CWE-Unknown"
         ),
         status=str(item.get("status") or "proven").strip(),
+        sarif_rule_id=(
+            str(item["sarif_rule_id"]).strip() if item.get("sarif_rule_id") else None
+        ),
         file=str(item["file"]).strip() if item.get("file") else None,
         line_range=parsed_range,
         symbol=str(item["symbol"]).strip() if item.get("symbol") else None,
@@ -191,6 +215,31 @@ def _parse_variant_sources(item: Any) -> VariantSources | None:
     if not sources.any():
         raise ValueError("variant_sources must contain at least one source")
     return sources
+
+
+def _parse_coverage_matrix_entry(item: Any) -> CoverageMatrixEntry:
+    if not isinstance(item, dict):
+        raise ValueError("coverage_matrix entries must be mappings")
+    return CoverageMatrixEntry(
+        language=_required_coverage_value(item, "language"),
+        parser_runtime=_required_coverage_value(item, "parser_runtime"),
+        graph_mode=_required_coverage_value(item, "graph_mode"),
+        vulnerability_class=_required_coverage_value(item, "vulnerability_class"),
+        hunter=_required_coverage_value(item, "hunter"),
+        source_coverage=_required_coverage_value(item, "source_coverage"),
+        sink_coverage=_required_coverage_value(item, "sink_coverage"),
+        mitigation_coverage=_required_coverage_value(item, "mitigation_coverage"),
+        fixture_status=_required_coverage_value(item, "fixture_status"),
+        default_status=_required_coverage_value(item, "default_status"),
+        experimental_status=_required_coverage_value(item, "experimental_status"),
+    )
+
+
+def _required_coverage_value(item: dict[str, Any], key: str) -> str:
+    value = str(item.get(key) or "").strip()
+    if not value:
+        raise ValueError(f"coverage_matrix entry is missing {key}")
+    return value
 
 
 def _parse_cwe_equivalence(raw: Any) -> dict[str, tuple[str, ...]]:

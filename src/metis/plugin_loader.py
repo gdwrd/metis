@@ -146,6 +146,38 @@ def _load_builtin_plugins(plugin_config):
     except Exception as e:
         logger.warning(f"Failed to load built-in Verilog plugin: {e}")
 
+    try:
+        from metis.plugins.extra_plugins import (
+            BashPlugin,
+            CSharpPlugin,
+            DockerfilePlugin,
+            JavaPlugin,
+            JsonPlugin,
+            KotlinPlugin,
+            LuaPlugin,
+            PerlPlugin,
+            ScalaPlugin,
+            SwiftPlugin,
+            YamlPlugin,
+        )
+
+        for plugin_cls in (
+            JavaPlugin,
+            CSharpPlugin,
+            KotlinPlugin,
+            SwiftPlugin,
+            ScalaPlugin,
+            BashPlugin,
+            LuaPlugin,
+            PerlPlugin,
+            DockerfilePlugin,
+            YamlPlugin,
+            JsonPlugin,
+        ):
+            plugins.append(plugin_cls(plugin_config))
+    except Exception as e:
+        logger.warning(f"Failed to load extra built-in language plugins: {e}")
+
     return plugins
 
 

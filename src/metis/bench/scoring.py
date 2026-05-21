@@ -12,6 +12,7 @@ from metis.sarif.triage import METIS_TRIAGE_STATUS_KEY
 from .manifest import (
     BenchmarkCase,
     BenchmarkManifest,
+    CoverageMatrixEntry,
     ExpectedFinding,
     ExpectedHypothesis,
 )
@@ -62,6 +63,7 @@ class ReportedHypothesis:
     hunter: str
     vulnerability_class: str
     status: str
+    sarif_rule_id: str | None
     file: str
     line: int | None
     symbol: str | None
@@ -228,6 +230,30 @@ def score_hypotheses(
             reported_proven,
             matched_reported_proven,
         ),
+        "by_language": _hypothesis_metrics_by_language(
+            selected_cases,
+            expected,
+            matched_expected_indices,
+            reported,
+            matched_report_indices,
+        ),
+        "by_hunter": _hypothesis_metrics_by_hunter(
+            expected,
+            matched_expected_indices,
+            reported,
+            matched_report_indices,
+        ),
+        "by_language_cwe": _hypothesis_metrics_by_language_cwe(
+            selected_cases,
+            expected,
+            matched_expected_indices,
+            reported,
+            matched_report_indices,
+        ),
+        "missing_coverage": _missing_coverage_matrix_entries(
+            manifest.coverage_matrix,
+            selected_cases,
+        ),
         "by_class": _hypothesis_metrics_by_class(
             expected,
             matched_expected_indices,
@@ -308,6 +334,66 @@ def compare_to_baseline(
             recall_tolerance=recall_tolerance,
         )
     )
+    return regressions
+
+
+def _grouped_hypothesis_baseline_regressions(
+    current: dict[str, Any],
+    baseline: dict[str, Any],
+    *,
+    field: str,
+    recall_tolerance: float,
+) -> list[dict[str, Any]]:
+    current_groups = current.get(field) or {}
+    baseline_groups = baseline.get(field) or {}
+    if not isinstance(current_groups, dict) or not isinstance(baseline_groups, dict):
+        return []
+    regressions: list[dict[str, Any]] = []
+    for key, baseline_metrics in baseline_groups.items():
+        if not isinstance(baseline_metrics, dict):
+            continue
+        baseline_recall = baseline_metrics.get("proven_recall")
+        current_recall = (current_groups.get(key) or {}).get("proven_recall", 0.0)
+        if isinstance(baseline_recall, int | float):
+            drop = float(baseline_recall) - float(current_recall)
+            if drop > recall_tolerance:
+                regressions.append(
+                    {
+                        "scope": f"hypothesis_{field}_proven_recall",
+                        "key": str(key),
+                        "baseline_recall": float(baseline_recall),
+                        "current_recall": float(current_recall),
+                        "drop": drop,
+                        "tolerance": recall_tolerance,
+                    }
+                )
+    for key in sorted(
+        {str(item) for item in (*baseline_groups.keys(), *current_groups.keys())}
+    ):
+        baseline_metrics = baseline_groups.get(key) or {}
+        current_metrics = current_groups.get(key) or {}
+        if not isinstance(baseline_metrics, dict) or not isinstance(
+            current_metrics,
+            dict,
+        ):
+            continue
+        baseline_rate = baseline_metrics.get("false_positive_rate")
+        if baseline_rate is None:
+            baseline_rate = 0.0
+        current_rate = current_metrics.get("false_positive_rate", 0.0)
+        if isinstance(baseline_rate, int | float):
+            increase = float(current_rate) - float(baseline_rate)
+            if increase > recall_tolerance:
+                regressions.append(
+                    {
+                        "scope": f"hypothesis_{field}_false_positive_rate",
+                        "key": str(key),
+                        "baseline_rate": float(baseline_rate),
+                        "current_rate": float(current_rate),
+                        "increase": increase,
+                        "tolerance": recall_tolerance,
+                    }
+                )
     return regressions
 
 
@@ -418,6 +504,15 @@ def _hypothesis_baseline_regressions(
                     "tolerance": recall_tolerance,
                 }
             )
+    for field in ("by_language", "by_hunter", "by_language_cwe"):
+        regressions.extend(
+            _grouped_hypothesis_baseline_regressions(
+                current,
+                baseline,
+                field=field,
+                recall_tolerance=recall_tolerance,
+            )
+        )
     return regressions
 
 
@@ -618,6 +713,11 @@ def _extract_reported_hypotheses(hypotheses: list[Any]) -> list[ReportedHypothes
                     payload.get("vulnerability_class") or payload.get("cwe") or ""
                 ),
                 status=_normalized_hypothesis_status(payload.get("status")),
+                sarif_rule_id=(
+                    str(payload["sarif_rule_id"]).strip()
+                    if payload.get("sarif_rule_id")
+                    else None
+                ),
                 file=str(location.get("file") or ""),
                 line=_positive_int_or_none(location.get("line")),
                 symbol=(
@@ -716,7 +816,9 @@ def _analysis_budget_summary(
     }
 
 
-def _research_command_metrics(research_metrics: dict[str, Any] | None) -> dict[str, Any]:
+def _research_command_metrics(
+    research_metrics: dict[str, Any] | None,
+) -> dict[str, Any]:
     if not isinstance(research_metrics, dict):
         return {}
     command = research_metrics.get("research_command")
@@ -979,6 +1081,8 @@ def _hypothesis_matches(
     if not _cwe_matches(
         item.vulnerability_class, reported.vulnerability_class, manifest
     ):
+        return False
+    if item.sarif_rule_id and item.sarif_rule_id != reported.sarif_rule_id:
         return False
     if _normalized_hypothesis_status(item.status) != reported.status:
         return False
@@ -1300,6 +1404,177 @@ def _hypothesis_metrics_by_class(
     return metrics
 
 
+def _hypothesis_metrics_by_language(
+    cases: tuple[BenchmarkCase, ...],
+    expected: list[ExpectedHypothesisRecord],
+    matched_expected_indices: set[int],
+    reported: list[ReportedHypothesis],
+    matched_report_indices: set[int],
+) -> dict[str, dict[str, Any]]:
+    require_case_id = len(cases) > 1
+    languages = {
+        *(record.case.language for record in expected),
+        *(
+            _language_for_reported_hypothesis(
+                item,
+                cases,
+                require_case_id=require_case_id,
+            )
+            for item in reported
+        ),
+    }
+    return {
+        language: _hypothesis_metrics_for_group(
+            expected,
+            matched_expected_indices,
+            reported,
+            matched_report_indices,
+            expected_filter=lambda record, value=language: (
+                record.case.language == value
+            ),
+            reported_filter=lambda item, value=language: (
+                _language_for_reported_hypothesis(
+                    item,
+                    cases,
+                    require_case_id=require_case_id,
+                )
+                == value
+            ),
+        )
+        for language in sorted(item for item in languages if item)
+    }
+
+
+def _hypothesis_metrics_by_hunter(
+    expected: list[ExpectedHypothesisRecord],
+    matched_expected_indices: set[int],
+    reported: list[ReportedHypothesis],
+    matched_report_indices: set[int],
+) -> dict[str, dict[str, Any]]:
+    hunters = {
+        *(record.hypothesis.hunter for record in expected),
+        *(item.hunter for item in reported),
+    }
+    return {
+        hunter: _hypothesis_metrics_for_group(
+            expected,
+            matched_expected_indices,
+            reported,
+            matched_report_indices,
+            expected_filter=lambda record, value=hunter: (
+                record.hypothesis.hunter == value
+            ),
+            reported_filter=lambda item, value=hunter: item.hunter == value,
+        )
+        for hunter in sorted(item for item in hunters if item)
+    }
+
+
+def _hypothesis_metrics_by_language_cwe(
+    cases: tuple[BenchmarkCase, ...],
+    expected: list[ExpectedHypothesisRecord],
+    matched_expected_indices: set[int],
+    reported: list[ReportedHypothesis],
+    matched_report_indices: set[int],
+) -> dict[str, dict[str, Any]]:
+    require_case_id = len(cases) > 1
+    expected_keys = {
+        _language_cwe_key(record.case.language, record.hypothesis.vulnerability_class)
+        for record in expected
+    }
+    reported_keys = {
+        _language_cwe_key(
+            _language_for_reported_hypothesis(
+                item,
+                cases,
+                require_case_id=require_case_id,
+            ),
+            item.vulnerability_class,
+        )
+        for item in reported
+    }
+    return {
+        key: _hypothesis_metrics_for_group(
+            expected,
+            matched_expected_indices,
+            reported,
+            matched_report_indices,
+            expected_filter=lambda record, value=key: (
+                _language_cwe_key(
+                    record.case.language,
+                    record.hypothesis.vulnerability_class,
+                )
+                == value
+            ),
+            reported_filter=lambda item, value=key: (
+                _language_cwe_key(
+                    _language_for_reported_hypothesis(
+                        item,
+                        cases,
+                        require_case_id=require_case_id,
+                    ),
+                    item.vulnerability_class,
+                )
+                == value
+            ),
+        )
+        for key in sorted(item for item in expected_keys | reported_keys if item)
+    }
+
+
+def _hypothesis_metrics_for_group(
+    expected: list[ExpectedHypothesisRecord],
+    matched_expected_indices: set[int],
+    reported: list[ReportedHypothesis],
+    matched_report_indices: set[int],
+    *,
+    expected_filter,
+    reported_filter,
+) -> dict[str, Any]:
+    expected_indices = [
+        idx for idx, record in enumerate(expected) if expected_filter(record)
+    ]
+    reported_indices = [
+        idx for idx, hypothesis in enumerate(reported) if reported_filter(hypothesis)
+    ]
+    metrics: dict[str, Any] = {
+        "generated": len(reported_indices),
+        "proven": sum(
+            1 for idx in reported_indices if reported[idx].status == "proven"
+        ),
+        "killed": sum(
+            1 for idx in reported_indices if reported[idx].status == "killed"
+        ),
+        "unresolved": sum(
+            1 for idx in reported_indices if reported[idx].status == "unresolved"
+        ),
+    }
+    for status in _HYPOTHESIS_STATUSES:
+        status_expected = [
+            idx
+            for idx in expected_indices
+            if _normalized_hypothesis_status(expected[idx].hypothesis.status) == status
+        ]
+        status_reported = [
+            idx for idx in reported_indices if reported[idx].status == status
+        ]
+        tp = len([idx for idx in status_expected if idx in matched_expected_indices])
+        fp = len([idx for idx in status_reported if idx not in matched_report_indices])
+        fn = len(
+            [idx for idx in status_expected if idx not in matched_expected_indices]
+        )
+        metrics[f"{status}_tp"] = tp
+        metrics[f"{status}_fp"] = fp
+        metrics[f"{status}_fn"] = fn
+        metrics[f"{status}_recall"] = tp / (tp + fn) if tp + fn else 0.0
+        if status == "proven":
+            metrics["proven_recall"] = metrics[f"{status}_recall"]
+            metrics["false_positive_rate"] = (
+                fp / len(status_reported) if status_reported else 0.0
+            )
+    return metrics
+
+
 def _hypothesis_metrics_by_domain(
     expected: list[ExpectedHypothesisRecord],
     matched_expected_indices: set[int],
@@ -1435,6 +1710,50 @@ def _hypothesis_case_metrics(
     return metrics
 
 
+def _missing_coverage_matrix_entries(
+    coverage_matrix: tuple[CoverageMatrixEntry, ...],
+    cases: tuple[BenchmarkCase, ...],
+) -> list[dict[str, Any]]:
+    expected_coverage = {
+        (
+            case.language,
+            hypothesis.vulnerability_class,
+            hypothesis.hunter,
+        )
+        for case in cases
+        for hypothesis in case.expected_hypotheses
+        if _normalized_hypothesis_status(hypothesis.status) == "proven"
+    }
+    missing: list[dict[str, Any]] = []
+    for entry in coverage_matrix:
+        key = (entry.language, entry.vulnerability_class, entry.hunter)
+        if entry.fixture_status == "present" and key in expected_coverage:
+            continue
+        missing.append(
+            {
+                "language": entry.language,
+                "parser_runtime": entry.parser_runtime,
+                "graph_mode": entry.graph_mode,
+                "vulnerability_class": entry.vulnerability_class,
+                "hunter": entry.hunter,
+                "source_coverage": entry.source_coverage,
+                "sink_coverage": entry.sink_coverage,
+                "mitigation_coverage": entry.mitigation_coverage,
+                "fixture_status": entry.fixture_status,
+                "default_status": entry.default_status,
+                "experimental_status": entry.experimental_status,
+            }
+        )
+    return sorted(
+        missing,
+        key=lambda item: (
+            item["language"],
+            item["vulnerability_class"],
+            item["hunter"],
+        ),
+    )
+
+
 def _case_for_reported_hypothesis(
     hypothesis: ReportedHypothesis,
     cases: tuple[BenchmarkCase, ...],
@@ -1462,6 +1781,24 @@ def _case_for_reported_hypothesis(
             if expected.file and _path_matches(expected.file, reported):
                 return case
     return None
+
+
+def _language_for_reported_hypothesis(
+    hypothesis: ReportedHypothesis,
+    cases: tuple[BenchmarkCase, ...],
+    *,
+    require_case_id: bool,
+) -> str:
+    case = _case_for_reported_hypothesis(
+        hypothesis,
+        cases,
+        require_case_id=require_case_id,
+    )
+    return case.language if case else "unknown"
+
+
+def _language_cwe_key(language: str, vulnerability_class: str) -> str:
+    return f"{language}|{vulnerability_class}"
 
 
 def _normalized_hypothesis_status(value: Any) -> str:

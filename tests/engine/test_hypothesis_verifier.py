@@ -205,10 +205,14 @@ def test_research_sarif_promotes_only_proven_hypotheses_with_properties():
 
     results = sarif["runs"][0]["results"]
     assert len(results) == 1
+    assert results[0]["ruleId"] == "CWE-862"
+    assert sarif["runs"][0]["tool"]["driver"]["rules"][-1]["id"] == "CWE-862"
     props = results[0]["properties"]
     assert props["metisHypothesisId"] == "hyp-proven"
     assert props["metisHypothesisStatus"] == "proven"
     assert props["metisHunter"] == "test_hunter"
+    assert props["metisSarifRuleId"] == "CWE-862"
+    assert props["metisSarifRuleTitle"] == "Test hypothesis"
     assert props["metisEvidenceLedger"] == ".metis/research/evidence.jsonl"
     assert props["metisEvidenceObligations"] == [
         "source",

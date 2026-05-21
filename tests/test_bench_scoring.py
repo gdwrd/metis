@@ -261,6 +261,11 @@ cases:
     assert score["by_status"]["killed"]["recall"] == 1.0
     assert score["proven_recall_by_class"] == {"CWE-862": 1.0}
     assert score["false_positive_rate_by_class"] == {"CWE-862": 0.0}
+    assert score["by_language"]["python"]["proven_recall"] == 1.0
+    assert score["by_language"]["python"]["false_positive_rate"] == 0.0
+    assert score["by_hunter"]["authz_outlier"]["proven_recall"] == 1.0
+    assert score["by_language_cwe"]["python|CWE-862"]["proven_recall"] == 1.0
+    assert score["missing_coverage"] == []
     assert score["cases"]["authz-001"]["generated"] == 3
     assert score["cases"]["authz-001"]["killed_tp"] == 1
     assert score["cases"]["authz-001"]["lessons_reused"] == 2
@@ -508,6 +513,223 @@ def test_compare_to_baseline_reports_new_hypothesis_fp_class():
         {
             "scope": "hypothesis_false_positive_rate",
             "vulnerability_class": "CWE-89",
+            "baseline_rate": 0.0,
+            "current_rate": 1.0,
+            "increase": 1.0,
+            "tolerance": 0.05,
+        }
+    ]
+
+
+def test_score_hypotheses_reports_missing_coverage_matrix_rows(tmp_path):
+    manifest_path = tmp_path / "manifest.yaml"
+    manifest_path.write_text(
+        """
+coverage_matrix:
+  - language: python
+    parser_runtime: python
+    graph_mode: ast
+    vulnerability_class: CWE-862
+    hunter: authz_outlier
+    source_coverage: request_input
+    sink_coverage: object_access
+    mitigation_coverage: owner_check
+    fixture_status: present
+    default_status: default
+    experimental_status: stable
+  - language: javascript
+    parser_runtime: javascript
+    graph_mode: ast
+    vulnerability_class: CWE-89
+    hunter: sql_injection
+    source_coverage: request_input
+    sink_coverage: sql_execution
+    mitigation_coverage: parameterized_query
+    fixture_status: missing
+    default_status: default
+    experimental_status: stable
+cases:
+  - id: authz-001
+    source: internal
+    cwe: CWE-862
+    language: python
+    path: app
+    expected_findings: []
+    expected_hypotheses:
+      - hunter: authz_outlier
+        vulnerability_class: CWE-862
+        status: proven
+        file: app.py
+        symbol: update_project_settings
+        line_range: [20, 20]
+""",
+        encoding="utf-8",
+    )
+    manifest = load_manifest(manifest_path)
+
+    score = score_hypotheses(
+        [_hypothesis("proven", "app/app.py", 20, "update_project_settings")],
+        manifest,
+    )
+
+    assert score["missing_coverage"] == [
+        {
+            "language": "javascript",
+            "parser_runtime": "javascript",
+            "graph_mode": "ast",
+            "vulnerability_class": "CWE-89",
+            "hunter": "sql_injection",
+            "source_coverage": "request_input",
+            "sink_coverage": "sql_execution",
+            "mitigation_coverage": "parameterized_query",
+            "fixture_status": "missing",
+            "default_status": "default",
+            "experimental_status": "stable",
+        }
+    ]
+
+
+def test_compare_to_baseline_reports_grouped_hypothesis_regressions():
+    current = {
+        "mode": "review+research",
+        "quick": True,
+        "case_count": 1,
+        "case_ids": ["internal-authz-outlier-001"],
+        "by_cwe": {},
+        "hypotheses": {
+            "by_language": {
+                "python": {
+                    "proven_recall": 0.5,
+                    "false_positive_rate": 0.2,
+                }
+            },
+            "by_hunter": {
+                "authz_outlier": {
+                    "proven_recall": 0.5,
+                    "false_positive_rate": 0.2,
+                }
+            },
+            "by_language_cwe": {
+                "python|CWE-862": {
+                    "proven_recall": 0.5,
+                    "false_positive_rate": 0.2,
+                }
+            },
+        },
+    }
+    baseline = {
+        "mode": "review+research",
+        "quick": True,
+        "case_count": 1,
+        "case_ids": ["internal-authz-outlier-001"],
+        "by_cwe": {},
+        "hypotheses": {
+            "by_language": {
+                "python": {
+                    "proven_recall": 1.0,
+                    "false_positive_rate": 0.0,
+                }
+            },
+            "by_hunter": {
+                "authz_outlier": {
+                    "proven_recall": 1.0,
+                    "false_positive_rate": 0.0,
+                }
+            },
+            "by_language_cwe": {
+                "python|CWE-862": {
+                    "proven_recall": 1.0,
+                    "false_positive_rate": 0.0,
+                }
+            },
+        },
+    }
+
+    regressions = compare_to_baseline(current, baseline, recall_tolerance=0.05)
+
+    assert regressions == [
+        {
+            "scope": "hypothesis_by_language_proven_recall",
+            "key": "python",
+            "baseline_recall": 1.0,
+            "current_recall": 0.5,
+            "drop": 0.5,
+            "tolerance": 0.05,
+        },
+        {
+            "scope": "hypothesis_by_language_false_positive_rate",
+            "key": "python",
+            "baseline_rate": 0.0,
+            "current_rate": 0.2,
+            "increase": 0.2,
+            "tolerance": 0.05,
+        },
+        {
+            "scope": "hypothesis_by_hunter_proven_recall",
+            "key": "authz_outlier",
+            "baseline_recall": 1.0,
+            "current_recall": 0.5,
+            "drop": 0.5,
+            "tolerance": 0.05,
+        },
+        {
+            "scope": "hypothesis_by_hunter_false_positive_rate",
+            "key": "authz_outlier",
+            "baseline_rate": 0.0,
+            "current_rate": 0.2,
+            "increase": 0.2,
+            "tolerance": 0.05,
+        },
+        {
+            "scope": "hypothesis_by_language_cwe_proven_recall",
+            "key": "python|CWE-862",
+            "baseline_recall": 1.0,
+            "current_recall": 0.5,
+            "drop": 0.5,
+            "tolerance": 0.05,
+        },
+        {
+            "scope": "hypothesis_by_language_cwe_false_positive_rate",
+            "key": "python|CWE-862",
+            "baseline_rate": 0.0,
+            "current_rate": 0.2,
+            "increase": 0.2,
+            "tolerance": 0.05,
+        },
+    ]
+
+
+def test_compare_to_baseline_reports_new_grouped_hypothesis_fp_bucket():
+    current = {
+        "mode": "review+research",
+        "quick": True,
+        "case_count": 1,
+        "case_ids": ["internal-authz-outlier-001"],
+        "by_cwe": {},
+        "hypotheses": {
+            "by_language": {
+                "javascript": {
+                    "proven_recall": 0.0,
+                    "false_positive_rate": 1.0,
+                }
+            }
+        },
+    }
+    baseline = {
+        "mode": "review+research",
+        "quick": True,
+        "case_count": 1,
+        "case_ids": ["internal-authz-outlier-001"],
+        "by_cwe": {},
+        "hypotheses": {"by_language": {}},
+    }
+
+    regressions = compare_to_baseline(current, baseline, recall_tolerance=0.05)
+
+    assert regressions == [
+        {
+            "scope": "hypothesis_by_language_false_positive_rate",
+            "key": "javascript",
             "baseline_rate": 0.0,
             "current_rate": 1.0,
             "increase": 1.0,

@@ -33,6 +33,7 @@ from .models import (
     build_hypothesis_id,
 )
 from .options import ResearchOptions
+from .parser_inventory import build_parser_inventory
 from .proof import LocalProofGenerator, LocalProofRunResult, ProofDecision
 from .learning import LessonRefreshResult, ResearchLearningStore
 from .reporting import (
@@ -91,6 +92,7 @@ __all__ = [
     "SourceTrust",
     "VariantPattern",
     "build_hypothesis_id",
+    "build_parser_inventory",
     "evidence_completeness",
     "generate_research_sarif",
     "hypotheses_to_review_results",

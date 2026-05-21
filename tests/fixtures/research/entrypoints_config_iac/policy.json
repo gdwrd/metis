@@ -1,0 +1,1 @@
+{"Statement":[{"Principal":"*","Action":"iam:*","Resource":"*"}]}

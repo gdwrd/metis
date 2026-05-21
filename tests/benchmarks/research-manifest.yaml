@@ -1,4 +1,291 @@
 line_tolerance: 1
+coverage_matrix:
+  - language: python
+    parser_runtime: python
+    graph_mode: ast
+    vulnerability_class: CWE-862
+    hunter: authz_outlier
+    source_coverage: http_route_params
+    sink_coverage: object_access_without_owner_check
+    mitigation_coverage: positive_negative_unresolved
+    fixture_status: present
+    default_status: default
+    experimental_status: stable
+  - language: python
+    parser_runtime: python
+    graph_mode: ast
+    vulnerability_class: CWE-74
+    hunter: injection_path
+    source_coverage: request_input
+    sink_coverage: command_execution
+    mitigation_coverage: sanitizer_order_and_helper_variants
+    fixture_status: present
+    default_status: default
+    experimental_status: stable
+  - language: python
+    parser_runtime: python
+    graph_mode: ast
+    vulnerability_class: CWE-78
+    hunter: command_injection
+    source_coverage: request_input
+    sink_coverage: shell_command_execution
+    mitigation_coverage: safe_argv_execution
+    fixture_status: present
+    default_status: default
+    experimental_status: stable
+  - language: python
+    parser_runtime: python
+    graph_mode: ast
+    vulnerability_class: CWE-94
+    hunter: code_injection
+    source_coverage: request_input
+    sink_coverage: dynamic_code_evaluation
+    mitigation_coverage: literal_eval
+    fixture_status: present
+    default_status: default
+    experimental_status: stable
+  - language: javascript
+    parser_runtime: tree_sitter
+    graph_mode: ast
+    vulnerability_class: CWE-78
+    hunter: command_injection
+    source_coverage: direct_input_and_helper_call
+    sink_coverage: child_process_exec
+    mitigation_coverage: validate_wrapper
+    fixture_status: present
+    default_status: default
+    experimental_status: stable
+  - language: php
+    parser_runtime: text_and_tree_sitter
+    graph_mode: server_script
+    vulnerability_class: CWE-78
+    hunter: command_injection
+    source_coverage: superglobal_input
+    sink_coverage: shell_exec
+    mitigation_coverage: escapeshellarg_wrapper
+    fixture_status: present
+    default_status: default
+    experimental_status: stable
+  - language: java_csharp
+    parser_runtime: tree_sitter
+    graph_mode: ast
+    vulnerability_class: CWE-78
+    hunter: command_injection
+    source_coverage: request_and_parameter_input
+    sink_coverage: runtime_exec_and_process_start
+    mitigation_coverage: validate_and_shellescape
+    fixture_status: present
+    default_status: default
+    experimental_status: stable
+  - language: go_ruby_bash
+    parser_runtime: tree_sitter_and_text
+    graph_mode: ast_and_script
+    vulnerability_class: CWE-78
+    hunter: command_injection
+    source_coverage: input_and_script_arguments
+    sink_coverage: system_exec_command_and_sh_c
+    mitigation_coverage: validate_wrapper
+    fixture_status: present
+    default_status: default
+    experimental_status: stable
+  - language: javascript_php_ruby
+    parser_runtime: tree_sitter_and_text
+    graph_mode: ast_and_server_script
+    vulnerability_class: CWE-94
+    hunter: code_injection
+    source_coverage: input_and_superglobal
+    sink_coverage: eval_vm_and_class_eval
+    mitigation_coverage: validate_wrapper
+    fixture_status: present
+    default_status: default
+    experimental_status: stable
+  - language: javascript_typescript
+    parser_runtime: tree_sitter
+    graph_mode: ast
+    vulnerability_class: CWE-89
+    hunter: sql_injection
+    source_coverage: input_parameter
+    sink_coverage: db_query
+    mitigation_coverage: prepare_and_parameterize
+    fixture_status: present
+    default_status: default
+    experimental_status: stable
+  - language: php
+    parser_runtime: text_and_tree_sitter
+    graph_mode: server_script
+    vulnerability_class: CWE-89
+    hunter: sql_injection
+    source_coverage: superglobal_input
+    sink_coverage: db_query
+    mitigation_coverage: intval_wrapper
+    fixture_status: present
+    default_status: default
+    experimental_status: stable
+  - language: java_csharp
+    parser_runtime: tree_sitter
+    graph_mode: ast
+    vulnerability_class: CWE-89
+    hunter: sql_injection
+    source_coverage: request_input
+    sink_coverage: sqlcommand
+    mitigation_coverage: prepare_wrapper_and_parameters
+    fixture_status: present
+    default_status: default
+    experimental_status: stable
+  - language: go_ruby
+    parser_runtime: tree_sitter
+    graph_mode: ast
+    vulnerability_class: CWE-89
+    hunter: sql_injection
+    source_coverage: input_parameter
+    sink_coverage: db_query_and_execute
+    mitigation_coverage: prepare_wrapper
+    fixture_status: present
+    default_status: default
+    experimental_status: stable
+  - language: python
+    parser_runtime: python
+    graph_mode: ast
+    vulnerability_class: CWE-1336
+    hunter: template_injection
+    source_coverage: request_input
+    sink_coverage: template_rendering
+    mitigation_coverage: fixed_template_selection
+    fixture_status: present
+    default_status: default
+    experimental_status: stable
+  - language: python
+    parser_runtime: python
+    graph_mode: ast
+    vulnerability_class: CWE-22
+    hunter: path_traversal
+    source_coverage: request_path
+    sink_coverage: filesystem_read
+    mitigation_coverage: safe_path_join
+    fixture_status: present
+    default_status: default
+    experimental_status: stable
+  - language: python
+    parser_runtime: python
+    graph_mode: ast
+    vulnerability_class: CWE-918
+    hunter: ssrf
+    source_coverage: request_url
+    sink_coverage: outbound_http_request
+    mitigation_coverage: allowlist_check
+    fixture_status: present
+    default_status: default
+    experimental_status: stable
+  - language: python
+    parser_runtime: python
+    graph_mode: ast
+    vulnerability_class: CWE-502
+    hunter: deserialization
+    source_coverage: request_body
+    sink_coverage: unsafe_deserialization
+    mitigation_coverage: signature_check
+    fixture_status: present
+    default_status: default
+    experimental_status: stable
+  - language: terraform
+    parser_runtime: terraform
+    graph_mode: config_resource
+    vulnerability_class: CWE-284
+    hunter: iac_exposure
+    source_coverage: public_network_resource
+    sink_coverage: ingress_rule
+    mitigation_coverage: restricted_cidr
+    fixture_status: present
+    default_status: default
+    experimental_status: stable
+  - language: c
+    parser_runtime: c
+    graph_mode: ast
+    vulnerability_class: CWE-416
+    hunter: memory_lifetime
+    source_coverage: callback_pointer
+    sink_coverage: lifetime_escape
+    mitigation_coverage: copied_owned_value
+    fixture_status: present
+    default_status: default
+    experimental_status: stable
+  - language: systemverilog
+    parser_runtime: verilog
+    graph_mode: ast
+    vulnerability_class: CWE-1262
+    hunter: hardware_security
+    source_coverage: security_register
+    sink_coverage: unprotected_register_storage
+    mitigation_coverage: shadowed_secure_storage
+    fixture_status: present
+    default_status: default
+    experimental_status: stable
+  - language: javascript_python
+    parser_runtime: tree_sitter_and_python
+    graph_mode: ast
+    vulnerability_class: CWE-943
+    hunter: nosql_injection
+    source_coverage: request_and_input_parameters
+    sink_coverage: nosql_find
+    mitigation_coverage: schema_validation
+    fixture_status: present
+    default_status: default
+    experimental_status: promoted
+  - language: python_java
+    parser_runtime: python_and_tree_sitter
+    graph_mode: ast
+    vulnerability_class: CWE-611
+    hunter: xxe
+    source_coverage: request_input
+    sink_coverage: xml_parser_calls
+    mitigation_coverage: defusedxml_safe_parser
+    fixture_status: present
+    default_status: default
+    experimental_status: promoted
+  - language: javascript_php
+    parser_runtime: tree_sitter_and_text
+    graph_mode: ast_and_server_script
+    vulnerability_class: CWE-79
+    hunter: xss
+    source_coverage: input_and_superglobal
+    sink_coverage: html_and_dom_sinks
+    mitigation_coverage: sanitize_and_htmlspecialchars
+    fixture_status: present
+    default_status: default
+    experimental_status: promoted
+  - language: terraform_json
+    parser_runtime: terraform_and_json
+    graph_mode: config_resource
+    vulnerability_class: CWE-798
+    hunter: secrets_exposure
+    source_coverage: config_environment_markers
+    sink_coverage: secret_token_password_keys
+    mitigation_coverage: vault_markers
+    fixture_status: present
+    default_status: opt_in
+    experimental_status: experimental
+  - language: python_ruby
+    parser_runtime: python_and_tree_sitter
+    graph_mode: ast
+    vulnerability_class: CWE-327
+    hunter: crypto_misuse
+    source_coverage: request_and_input_parameters
+    sink_coverage: md5_usage
+    mitigation_coverage: hmac_wrappers
+    fixture_status: present
+    default_status: default
+    experimental_status: promoted
+  - language: solidity
+    parser_runtime: text
+    graph_mode: ast
+    vulnerability_class: CWE-841
+    hunter: evm_external_call
+    source_coverage: calldata_and_sender
+    sink_coverage: external_call
+    mitigation_coverage: require_and_reentrancy_markers
+    fixture_status: present
+    default_status: opt_in
+    experimental_status: experimental
 cases:
   - id: internal-authz-outlier-001
     source: internal
@@ -94,6 +381,620 @@ cases:
         file: app.py
         symbol: run_default_command
         line_range: [112, 112]
+  - id: internal-command-injection-001
+    source: internal
+    cwe: CWE-78
+    language: python
+    path: cases/research/command_injection
+    quick: true
+    expected_findings: []
+    expected_hypotheses:
+      - hunter: command_injection
+        vulnerability_class: CWE-78
+        status: proven
+        file: app.py
+        symbol: run_command
+        line_range: [8, 8]
+      - hunter: command_injection
+        vulnerability_class: CWE-78
+        status: killed
+        file: app.py
+        symbol: run_safe_command
+        line_range: [13, 13]
+  - id: internal-command-injection-js-001
+    source: internal
+    cwe: CWE-78
+    language: javascript
+    path: cases/research/command_injection_js
+    quick: true
+    expected_findings: []
+    expected_hypotheses:
+      - hunter: command_injection
+        vulnerability_class: CWE-78
+        sarif_rule_id: CWE-78
+        status: proven
+        file: app.js
+        symbol: runCommand
+        line_range: [3, 3]
+      - hunter: command_injection
+        vulnerability_class: CWE-78
+        sarif_rule_id: CWE-78
+        status: killed
+        file: app.js
+        symbol: runSafeCommand
+        line_range: [8, 8]
+      - hunter: command_injection
+        vulnerability_class: CWE-78
+        sarif_rule_id: CWE-78
+        status: proven
+        file: app.js
+        symbol: runHelperCommand
+        line_range: [13, 13]
+  - id: internal-command-injection-php-001
+    source: internal
+    cwe: CWE-78
+    language: php
+    path: cases/research/command_injection_php
+    quick: true
+    expected_findings: []
+    expected_hypotheses:
+      - hunter: command_injection
+        vulnerability_class: CWE-78
+        sarif_rule_id: CWE-78
+        status: proven
+        file: app.php
+        symbol: __script__
+        line_range: [1, 1]
+      - hunter: command_injection
+        vulnerability_class: CWE-78
+        sarif_rule_id: CWE-78
+        status: proven
+        file: app.php
+        symbol: run_command
+        line_range: [3, 3]
+      - hunter: command_injection
+        vulnerability_class: CWE-78
+        sarif_rule_id: CWE-78
+        status: killed
+        file: safe.php
+        symbol: __script__
+        line_range: [1, 1]
+  - id: internal-command-injection-java-csharp-001
+    source: internal
+    cwe: CWE-78
+    language: java_csharp
+    path: cases/research/command_injection_java_csharp
+    quick: true
+    expected_findings: []
+    expected_hypotheses:
+      - hunter: command_injection
+        vulnerability_class: CWE-78
+        sarif_rule_id: CWE-78
+        status: proven
+        file: App.java
+        symbol: runCommand
+        line_range: [2, 2]
+      - hunter: command_injection
+        vulnerability_class: CWE-78
+        sarif_rule_id: CWE-78
+        status: killed
+        file: App.java
+        symbol: runSafeCommand
+        line_range: [7, 7]
+      - hunter: command_injection
+        vulnerability_class: CWE-78
+        sarif_rule_id: CWE-78
+        status: proven
+        file: Worker.cs
+        symbol: Run
+        line_range: [2, 2]
+      - hunter: command_injection
+        vulnerability_class: CWE-78
+        sarif_rule_id: CWE-78
+        status: killed
+        file: Worker.cs
+        symbol: RunSafe
+        line_range: [6, 6]
+  - id: internal-command-injection-go-ruby-bash-001
+    source: internal
+    cwe: CWE-78
+    language: go_ruby_bash
+    path: cases/research/command_injection_go_ruby_bash
+    quick: true
+    expected_findings: []
+    expected_hypotheses:
+      - hunter: command_injection
+        vulnerability_class: CWE-78
+        sarif_rule_id: CWE-78
+        status: proven
+        file: routes.rb
+        symbol: run_command
+        line_range: [1, 1]
+      - hunter: command_injection
+        vulnerability_class: CWE-78
+        sarif_rule_id: CWE-78
+        status: killed
+        file: routes.rb
+        symbol: run_safe_command
+        line_range: [6, 6]
+      - hunter: command_injection
+        vulnerability_class: CWE-78
+        sarif_rule_id: CWE-78
+        status: proven
+        file: server.go
+        symbol: RunCommand
+        line_range: [3, 3]
+      - hunter: command_injection
+        vulnerability_class: CWE-78
+        sarif_rule_id: CWE-78
+        status: killed
+        file: server.go
+        symbol: RunSafeCommand
+        line_range: [8, 8]
+      - hunter: command_injection
+        vulnerability_class: CWE-78
+        sarif_rule_id: CWE-78
+        status: unresolved
+        file: tool.sh
+        symbol: run_command
+        line_range: [3, 3]
+      - hunter: command_injection
+        vulnerability_class: CWE-78
+        sarif_rule_id: CWE-78
+        status: unresolved
+        file: tool.sh
+        symbol: run_safe_command
+        line_range: [8, 8]
+  - id: internal-code-injection-001
+    source: internal
+    cwe: CWE-94
+    language: python
+    path: cases/research/code_injection
+    quick: true
+    expected_findings: []
+    expected_hypotheses:
+      - hunter: code_injection
+        vulnerability_class: CWE-94
+        status: proven
+        file: app.py
+        symbol: eval_expr
+        line_range: [5, 5]
+      - hunter: code_injection
+        vulnerability_class: CWE-94
+        status: killed
+        file: app.py
+        symbol: eval_safe_expr
+        line_range: [10, 10]
+  - id: internal-code-injection-js-php-ruby-001
+    source: internal
+    cwe: CWE-94
+    language: javascript_php_ruby
+    path: cases/research/code_injection_js_php_ruby
+    quick: true
+    expected_findings: []
+    expected_hypotheses:
+      - hunter: code_injection
+        vulnerability_class: CWE-94
+        sarif_rule_id: CWE-94
+        status: proven
+        file: app.js
+        symbol: evalExpr
+        line_range: [1, 1]
+      - hunter: code_injection
+        vulnerability_class: CWE-94
+        sarif_rule_id: CWE-94
+        status: killed
+        file: app.js
+        symbol: evalSafeExpr
+        line_range: [6, 6]
+      - hunter: code_injection
+        vulnerability_class: CWE-94
+        sarif_rule_id: CWE-94
+        status: killed
+        file: app.php
+        symbol: __script__
+        line_range: [1, 1]
+      - hunter: code_injection
+        vulnerability_class: CWE-94
+        sarif_rule_id: CWE-94
+        status: proven
+        file: app.php
+        symbol: eval_expr
+        line_range: [6, 6]
+      - hunter: code_injection
+        vulnerability_class: CWE-94
+        sarif_rule_id: CWE-94
+        status: proven
+        file: app.rb
+        symbol: eval_expr
+        line_range: [1, 1]
+      - hunter: code_injection
+        vulnerability_class: CWE-94
+        sarif_rule_id: CWE-94
+        status: killed
+        file: app.rb
+        symbol: eval_safe_expr
+        line_range: [6, 6]
+  - id: internal-sql-injection-js-ts-001
+    source: internal
+    cwe: CWE-89
+    language: javascript_typescript
+    path: cases/research/sql_injection_js_ts
+    quick: true
+    expected_findings: []
+    expected_hypotheses:
+      - hunter: sql_injection
+        vulnerability_class: CWE-89
+        sarif_rule_id: CWE-89
+        status: proven
+        file: app.js
+        symbol: search
+        line_range: [1, 1]
+      - hunter: sql_injection
+        vulnerability_class: CWE-89
+        sarif_rule_id: CWE-89
+        status: killed
+        file: app.js
+        symbol: searchSafe
+        line_range: [6, 6]
+      - hunter: sql_injection
+        vulnerability_class: CWE-89
+        sarif_rule_id: CWE-89
+        status: proven
+        file: app.ts
+        symbol: searchOrder
+        line_range: [1, 1]
+      - hunter: sql_injection
+        vulnerability_class: CWE-89
+        sarif_rule_id: CWE-89
+        status: killed
+        file: app.ts
+        symbol: searchOrderSafe
+        line_range: [6, 6]
+  - id: internal-sql-injection-php-001
+    source: internal
+    cwe: CWE-89
+    language: php
+    path: cases/research/sql_injection_php
+    quick: true
+    expected_findings: []
+    expected_hypotheses:
+      - hunter: sql_injection
+        vulnerability_class: CWE-89
+        sarif_rule_id: CWE-89
+        status: proven
+        file: app.php
+        symbol: __script__
+        line_range: [1, 1]
+      - hunter: sql_injection
+        vulnerability_class: CWE-89
+        sarif_rule_id: CWE-89
+        status: proven
+        file: app.php
+        symbol: search_user
+        line_range: [3, 3]
+      - hunter: sql_injection
+        vulnerability_class: CWE-89
+        sarif_rule_id: CWE-89
+        status: killed
+        file: safe.php
+        symbol: __script__
+        line_range: [1, 1]
+  - id: internal-sql-injection-java-csharp-001
+    source: internal
+    cwe: CWE-89
+    language: java_csharp
+    path: cases/research/sql_injection_java_csharp
+    quick: true
+    expected_findings: []
+    expected_hypotheses:
+      - hunter: sql_injection
+        vulnerability_class: CWE-89
+        sarif_rule_id: CWE-89
+        status: proven
+        file: Controller.cs
+        symbol: Search
+        line_range: [2, 2]
+      - hunter: sql_injection
+        vulnerability_class: CWE-89
+        sarif_rule_id: CWE-89
+        status: killed
+        file: Controller.cs
+        symbol: SearchSafe
+        line_range: [8, 8]
+  - id: internal-sql-injection-go-ruby-001
+    source: internal
+    cwe: CWE-89
+    language: go_ruby
+    path: cases/research/sql_injection_go_ruby
+    quick: true
+    expected_findings: []
+    expected_hypotheses:
+      - hunter: sql_injection
+        vulnerability_class: CWE-89
+        sarif_rule_id: CWE-89
+        status: proven
+        file: routes.rb
+        symbol: search
+        line_range: [1, 1]
+      - hunter: sql_injection
+        vulnerability_class: CWE-89
+        sarif_rule_id: CWE-89
+        status: killed
+        file: routes.rb
+        symbol: search_safe
+        line_range: [6, 6]
+      - hunter: sql_injection
+        vulnerability_class: CWE-89
+        sarif_rule_id: CWE-89
+        status: proven
+        file: server.go
+        symbol: Search
+        line_range: [3, 3]
+      - hunter: sql_injection
+        vulnerability_class: CWE-89
+        sarif_rule_id: CWE-89
+        status: killed
+        file: server.go
+        symbol: SearchSafe
+        line_range: [8, 8]
+  - id: internal-nosql-injection-001
+    source: internal
+    cwe: CWE-943
+    language: javascript_python
+    path: cases/research/nosql_injection
+    quick: true
+    expected_findings: []
+    expected_hypotheses:
+      - hunter: nosql_injection
+        vulnerability_class: CWE-943
+        sarif_rule_id: CWE-943
+        status: proven
+        file: app.js
+        symbol: searchUsers
+        line_range: [1, 1]
+      - hunter: nosql_injection
+        vulnerability_class: CWE-943
+        sarif_rule_id: CWE-943
+        status: killed
+        file: app.js
+        symbol: searchUsersSafe
+        line_range: [6, 6]
+      - hunter: nosql_injection
+        vulnerability_class: CWE-943
+        sarif_rule_id: CWE-943
+        status: proven
+        file: app.py
+        symbol: search_users
+        line_range: [5, 5]
+      - hunter: nosql_injection
+        vulnerability_class: CWE-943
+        sarif_rule_id: CWE-943
+        status: killed
+        file: app.py
+        symbol: search_users_safe
+        line_range: [10, 10]
+  - id: internal-xxe-001
+    source: internal
+    cwe: CWE-611
+    language: python_java
+    path: cases/research/xxe
+    quick: true
+    expected_findings: []
+    expected_hypotheses:
+      - hunter: xxe
+        vulnerability_class: CWE-611
+        sarif_rule_id: CWE-611
+        status: killed
+        file: App.java
+        symbol: parseSafeXml
+        line_range: [7, 7]
+      - hunter: xxe
+        vulnerability_class: CWE-611
+        sarif_rule_id: CWE-611
+        status: proven
+        file: App.java
+        symbol: parseUserXml
+        line_range: [2, 2]
+      - hunter: xxe
+        vulnerability_class: CWE-611
+        sarif_rule_id: CWE-611
+        status: killed
+        file: app.py
+        symbol: parse_safe_xml
+        line_range: [10, 10]
+      - hunter: xxe
+        vulnerability_class: CWE-611
+        sarif_rule_id: CWE-611
+        status: proven
+        file: app.py
+        symbol: parse_user_xml
+        line_range: [5, 5]
+  - id: internal-xss-001
+    source: internal
+    cwe: CWE-79
+    language: javascript_php
+    path: cases/research/xss
+    quick: true
+    expected_findings: []
+    expected_hypotheses:
+      - hunter: xss
+        vulnerability_class: CWE-79
+        sarif_rule_id: CWE-79
+        status: killed
+        file: app.js
+        symbol: renderSafeHtml
+        line_range: [6, 6]
+      - hunter: xss
+        vulnerability_class: CWE-79
+        sarif_rule_id: CWE-79
+        status: proven
+        file: app.js
+        symbol: renderUserHtml
+        line_range: [1, 1]
+      - hunter: xss
+        vulnerability_class: CWE-79
+        sarif_rule_id: CWE-79
+        status: killed
+        file: view.php
+        symbol: render_safe_html
+        line_range: [8, 8]
+      - hunter: xss
+        vulnerability_class: CWE-79
+        sarif_rule_id: CWE-79
+        status: proven
+        file: view.php
+        symbol: render_user_html
+        line_range: [3, 3]
+  - id: internal-secrets-exposure-001
+    source: internal
+    cwe: CWE-798
+    language: terraform_json
+    path: cases/research/secrets_exposure
+    quick: true
+    expected_findings: []
+    expected_hypotheses:
+      - hunter: secrets_exposure
+        vulnerability_class: CWE-798
+        sarif_rule_id: CWE-798
+        status: proven
+        file: main.tf
+        symbol: aws_ssm_parameter.secret_token
+        line_range: [1, 1]
+      - hunter: secrets_exposure
+        vulnerability_class: CWE-798
+        sarif_rule_id: CWE-798
+        status: killed
+        file: main.tf
+        symbol: aws_ssm_parameter.vaulted_token
+        line_range: [7, 7]
+      - hunter: secrets_exposure
+        vulnerability_class: CWE-798
+        sarif_rule_id: CWE-798
+        status: killed
+        file: safe-secrets.json
+        symbol: safe-secrets.json
+        line_range: [1, 1]
+      - hunter: secrets_exposure
+        vulnerability_class: CWE-798
+        sarif_rule_id: CWE-798
+        status: proven
+        file: secrets.json
+        symbol: secrets.json
+        line_range: [1, 1]
+  - id: internal-crypto-misuse-001
+    source: internal
+    cwe: CWE-327
+    language: python_ruby
+    path: cases/research/crypto_misuse
+    quick: true
+    expected_findings: []
+    expected_hypotheses:
+      - hunter: crypto_misuse
+        vulnerability_class: CWE-327
+        sarif_rule_id: CWE-327
+        status: proven
+        file: app.py
+        symbol: hash_token
+        line_range: [1, 1]
+      - hunter: crypto_misuse
+        vulnerability_class: CWE-327
+        sarif_rule_id: CWE-327
+        status: killed
+        file: app.py
+        symbol: hash_token_safe
+        line_range: [6, 6]
+      - hunter: crypto_misuse
+        vulnerability_class: CWE-327
+        sarif_rule_id: CWE-327
+        status: proven
+        file: app.rb
+        symbol: hash_token
+        line_range: [1, 1]
+      - hunter: crypto_misuse
+        vulnerability_class: CWE-327
+        sarif_rule_id: CWE-327
+        status: killed
+        file: app.rb
+        symbol: hash_token_safe
+        line_range: [3, 3]
+  - id: internal-evm-external-call-001
+    source: internal
+    cwe: CWE-841
+    language: solidity
+    path: cases/research/evm_external_call
+    quick: true
+    expected_findings: []
+    expected_hypotheses:
+      - hunter: evm_external_call
+        vulnerability_class: CWE-841
+        sarif_rule_id: CWE-841
+        status: proven
+        file: Vault.sol
+        symbol: withdraw
+        line_range: [2, 2]
+      - hunter: evm_external_call
+        vulnerability_class: CWE-841
+        sarif_rule_id: CWE-841
+        status: proven
+        file: Vault.sol
+        symbol: withdraw
+        line_range: [2, 2]
+      - hunter: evm_external_call
+        vulnerability_class: CWE-841
+        sarif_rule_id: CWE-841
+        status: proven
+        file: Vault.sol
+        symbol: withdraw
+        line_range: [2, 2]
+      - hunter: evm_external_call
+        vulnerability_class: CWE-841
+        sarif_rule_id: CWE-841
+        status: proven
+        file: Vault.sol
+        symbol: withdraw
+        line_range: [2, 2]
+      - hunter: evm_external_call
+        vulnerability_class: CWE-841
+        sarif_rule_id: CWE-841
+        status: killed
+        file: Vault.sol
+        symbol: withdrawSafe
+        line_range: [6, 6]
+      - hunter: evm_external_call
+        vulnerability_class: CWE-841
+        sarif_rule_id: CWE-841
+        status: killed
+        file: Vault.sol
+        symbol: withdrawSafe
+        line_range: [6, 6]
+      - hunter: evm_external_call
+        vulnerability_class: CWE-841
+        sarif_rule_id: CWE-841
+        status: killed
+        file: Vault.sol
+        symbol: withdrawSafe
+        line_range: [6, 6]
+  - id: internal-template-injection-001
+    source: internal
+    cwe: CWE-1336
+    language: python
+    path: cases/research/template_injection
+    quick: true
+    expected_findings: []
+    expected_hypotheses:
+      - hunter: template_injection
+        vulnerability_class: CWE-1336
+        status: proven
+        file: app.py
+        symbol: render_user_template
+        line_range: [9, 9]
+      - hunter: template_injection
+        vulnerability_class: CWE-1336
+        status: killed
+        file: app.py
+        symbol: render_safe_template
+        line_range: [14, 14]
   - id: internal-path-traversal-001
     source: internal
     cwe: CWE-22
@@ -172,6 +1073,20 @@ cases:
         file: app.py
         symbol: load_default_payload
         line_range: [32, 32]
+  - id: internal-iac-exposure-001
+    source: internal
+    cwe: CWE-284
+    language: terraform
+    path: cases/research/iac_exposure
+    quick: true
+    expected_findings: []
+    expected_hypotheses:
+      - hunter: iac_exposure
+        vulnerability_class: CWE-284
+        status: proven
+        file: main.tf
+        symbol: aws_security_group.public_web
+        line_range: [1, 1]
   - id: internal-memory-lifetime-001
     source: internal
     cwe: CWE-416

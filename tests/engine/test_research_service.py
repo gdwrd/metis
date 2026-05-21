@@ -15,6 +15,7 @@ from metis.engine.research import (
     ResearchRunRequest,
     ResearchRunState,
     ResearchRunStatus,
+    ResearchOptions,
 )
 from pydantic import ValidationError
 
@@ -109,6 +110,42 @@ def test_research_service_runs_api_request_and_builds_status(engine, tmp_path):
     assert status.sarif_path.endswith(".metis/research/results.sarif")
     assert status.research_report_path.endswith(".metis/research/report.json")
     assert result.metric_summary["evidence_policy"] == "triage_evidence"
+
+
+def test_research_service_skips_umbrella_injection_when_specific_rce_selected(
+    engine,
+    tmp_path,
+):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "app.py").write_text(
+        "import subprocess\n\n"
+        "def run_command(request):\n"
+        "    cmd = request.args.get('cmd')\n"
+        "    subprocess.run(cmd, shell=True)\n",
+        encoding="utf-8",
+    )
+    engine.codebase_path = str(repo)
+    engine._config.codebase_path = str(repo)
+
+    result = engine.research.run(
+        repo,
+        options=ResearchOptions(
+            hunters=("command_injection", "injection_path"),
+            rebuild=True,
+            persist=False,
+        ),
+    )
+
+    assert result.metric_summary["selected_hunters"] == ("command_injection",)
+    assert result.metric_summary["requested_hunters"] == (
+        "command_injection",
+        "injection_path",
+    )
+    assert result.metric_summary["skipped_hunters"]["injection_path"].startswith(
+        "skipped because class-specific RCE hunters"
+    )
+    assert {item.hunter for item in result.generated} == {"command_injection"}
 
 
 def test_research_service_tracks_async_request_status(engine, tmp_path):
@@ -228,9 +265,7 @@ def test_research_service_query_helpers_filter_hypotheses_and_evidence(
     )
 
     assert [item.status for item in hypotheses] == [HypothesisStatus.PROVEN]
-    assert [entry.obligation for entry in missing_guard_evidence] == [
-        "missing_guard"
-    ]
+    assert [entry.obligation for entry in missing_guard_evidence] == ["missing_guard"]
 
 
 def test_research_service_job_scoped_queries_and_cleanup(engine, tmp_path):

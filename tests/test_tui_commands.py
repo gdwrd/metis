@@ -46,10 +46,15 @@ def test_parse_slash_command_accepts_security_report_with_optional_path():
 
 
 def test_parse_slash_command_accepts_research_hunters():
-    request = parse_slash_command("/research --hunters authz_outlier,ssrf")
+    request = parse_slash_command("/research --hunters command_injection,ssrf")
 
     assert request.name == "research"
-    assert request.args == ("--hunters", "authz_outlier,ssrf")
+    assert request.args == ("--hunters", "command_injection,ssrf")
+
+
+def test_parse_slash_command_rejects_unknown_research_hunter():
+    with pytest.raises(ValueError, match="Unknown research hunter: missing"):
+        parse_slash_command("/research --hunters command_injection,missing")
 
 
 def test_parse_slash_command_accepts_research_runtime_overrides():

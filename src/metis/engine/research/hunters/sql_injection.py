@@ -7,6 +7,7 @@ from metis.engine.research.hunters.graph_pattern import (
     GraphPatternHunter,
     GraphPatternSpec,
 )
+from metis.engine.research.rules import markers_for
 
 
 class SqlInjectionHunter(GraphPatternHunter):
@@ -22,37 +23,25 @@ class SqlInjectionHunter(GraphPatternHunter):
                 sink_obligation="sql_sink",
                 missing_mitigation_obligation="missing_parameterization",
                 mitigation_label="SQL parameterization or escaping",
-                sink_markers=(
-                    "sql_query",
-                    "query",
-                    "queryrow",
-                    "mysql_query",
-                    "mysqli_query",
-                    "pg_query",
-                    "sqlite_query",
-                    "pdo.query",
-                    "pdo.exec",
-                    "db.query",
-                    "db.exec",
-                    "dbh.do",
-                    "execute",
-                    "exec",
-                ),
-                mitigation_markers=(
-                    "prepare",
-                    "bind_param",
-                    "bindvalue",
-                    "quote",
-                    "escape",
-                    "real_escape_string",
-                    "intval",
-                    "filter_input",
-                    "parameterize",
+                sink_markers=markers_for("sink", families=("sql_injection",)),
+                mitigation_markers=markers_for(
+                    "sanitizer",
+                    families=("sql_injection",),
                 ),
                 impact=(
                     "Attacker-controlled input may reach a SQL interpreter "
                     "without parameterization or escaping."
                 ),
-                supported_languages=("python", "php", "perl"),
+                supported_languages=(
+                    "python",
+                    "javascript",
+                    "typescript",
+                    "php",
+                    "perl",
+                    "ruby",
+                    "go",
+                ),
+                rule_families=("sql_injection",),
+                default_enabled=True,
             )
         )

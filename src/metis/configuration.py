@@ -11,11 +11,19 @@ from pathlib import Path
 logger = logging.getLogger("metis")
 DEFAULT_RESEARCH_HUNTERS = (
     "authz_outlier",
+    "command_injection",
+    "code_injection",
+    "crypto_misuse",
+    "template_injection",
     "sql_injection",
     "injection_path",
+    "nosql_injection",
     "path_traversal",
     "ssrf",
     "deserialization",
+    "xss",
+    "xxe",
+    "iac_exposure",
     "memory_lifetime",
     "hardware_security",
 )

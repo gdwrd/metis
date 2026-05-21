@@ -43,6 +43,12 @@ class GraphPatternSpec:
     impact: str
     supported_languages: tuple[str, ...] = ("python",)
     priority: ResearchPriority = ResearchPriority.HIGH
+    rule_families: tuple[str, ...] = ()
+    default_enabled: bool = False
+    experimental: bool = False
+    promotion_criteria: tuple[str, ...] = ()
+    promotion_status: str = "unassessed"
+    promotion_skip_reason: str | None = None
 
     @property
     def obligations(self) -> tuple[str, ...]:
@@ -64,6 +70,12 @@ class GraphPatternSpec:
             required_graph_fields=("nodes", "tags", "metadata"),
             evidence_obligations=self.obligations,
             benchmark_classes=(self.vulnerability_class,),
+            rule_families=self.rule_families,
+            default_enabled=self.default_enabled,
+            experimental=self.experimental,
+            promotion_criteria=self.promotion_criteria,
+            promotion_status=self.promotion_status,
+            promotion_skip_reason=self.promotion_skip_reason,
         )
 
 
@@ -103,7 +115,7 @@ class GraphPatternHunter:
         function_nodes = {
             node.id: node
             for node in security_graph.nodes
-            if node.type == "function"
+            if node.type in {"function", "resource", "config"}
         }
         source_callers_by_sink: dict[
             str, list[tuple[SecurityGraphNode, SecurityTag, SecurityTag | None]]
@@ -204,7 +216,11 @@ class GraphPatternHunter:
             kind="sink",
             markers=self.spec.sink_markers,
         )
-        sources = _source_tags(node.tags, sink_markers=self.spec.sink_markers)
+        sources = _source_tags(
+            node.tags,
+            sink_markers=self.spec.sink_markers,
+            mitigation_markers=self.spec.mitigation_markers,
+        )
         mitigations = _matching_tags(
             node.tags,
             kind=("sanitizer", "guard"),
@@ -463,7 +479,9 @@ class GraphPatternHunter:
         source = candidate.source
         mitigation = candidate.mitigation
         if source is None or mitigation is None:
-            raise ValueError("killed graph-pattern evidence requires source and mitigation")
+            raise ValueError(
+                "killed graph-pattern evidence requires source and mitigation"
+            )
         return [
             _evidence(
                 hypothesis_id,
@@ -737,9 +755,7 @@ def _text_source_flows_to_function_call(
     source_offsets = _marker_offsets(body, source.value, source=True)
     sink_offsets = _marker_offsets(body, function_name, source=False)
     return bool(
-        source_offsets
-        and sink_offsets
-        and min(source_offsets) <= max(sink_offsets)
+        source_offsets and sink_offsets and min(source_offsets) <= max(sink_offsets)
     )
 
 
@@ -761,7 +777,23 @@ def _text_mitigation_flows_to_function_call(
         return False
     earliest_source = min(source_offsets)
     last_sink = max(sink_offsets)
-    return any(earliest_source <= offset <= last_sink for offset in mitigation_offsets)
+    return any(
+        earliest_source <= offset <= last_sink
+        or (
+            offset <= earliest_source <= last_sink
+            and _text_mitigation_wraps_source(body, offset, earliest_source)
+        )
+        for offset in mitigation_offsets
+    )
+
+
+def _text_mitigation_wraps_source(
+    body: str,
+    mitigation_offset: int,
+    source_offset: int,
+) -> bool:
+    segment = body[mitigation_offset:source_offset]
+    return "(" in segment and "\n" not in segment and ";" not in segment
 
 
 def _text_body_for_node(root_path: Path, node: SecurityGraphNode) -> str | None:
@@ -819,11 +851,33 @@ def _marker_offsets(body: str, marker: str, *, source: bool) -> list[int]:
         "tx.origin",
     }:
         patterns = [rf"\b{re.escape(marker)}\b"]
-    elif "." in lowered:
+    elif lowered == "runtime.exec":
+        patterns = [
+            r"\bruntime\s*\.\s*getruntime\s*\(\s*\)\s*\.\s*exec\s*\(",
+            r"\bruntime\s*\.\s*exec\s*\(",
+        ]
+    elif lowered == "getruntime().exec":
+        patterns = [r"\bgetruntime\s*\(\s*\)\s*\.\s*exec\s*\("]
+    elif lowered == "process.start":
+        patterns = [r"\bprocess\s*\.\s*start\s*\("]
+    elif lowered == "system.diagnostics.process.start":
+        patterns = [r"\bsystem\s*\.\s*diagnostics\s*\.\s*process\s*\.\s*start\s*\("]
+    elif lowered == "exec.command":
+        patterns = [r"\bexec\s*\.\s*command(?:context)?\s*\("]
+    elif lowered == "command::new":
+        patterns = [r"\bcommand\s*::\s*new\s*\("]
+    elif lowered == "std::process::command":
+        patterns = [r"\bstd\s*::\s*process\s*::\s*command\s*::\s*new\s*\("]
+    elif lowered == "vm.runin":
+        patterns = [r"\bvm\s*\.\s*runin\w*\s*\("]
+    elif lowered == "pdo::query":
+        patterns = [r"\bpdo\s*::\s*query\s*\("]
+    elif "." in lowered and _looks_like_dotted_call_marker(lowered):
         receiver, method = lowered.rsplit(".", 1)
         patterns = [
             rf"\${re.escape(receiver)}\s*->\s*{re.escape(method)}\s*\(",
             rf"\b{re.escape(receiver)}\s*\.\s*{re.escape(method)}\s*\(",
+            rf"\b{re.escape(receiver)}\s*->\s*{re.escape(method)}\s*\(",
         ]
     elif lowered in {
         "exec",
@@ -853,6 +907,10 @@ def _marker_offsets(body: str, marker: str, *, source: bool) -> list[int]:
     for pattern in patterns:
         offsets.extend(match.start() for match in re.finditer(pattern, body, re.I))
     return sorted(offsets)
+
+
+def _looks_like_dotted_call_marker(marker: str) -> bool:
+    return bool(re.match(r"^[a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*)+$", marker))
 
 
 def _source_flows_to_direct_call(
@@ -1135,7 +1193,10 @@ def _function_ast_for_node(
     except (OSError, SyntaxError, UnicodeDecodeError):
         return None
     for child in ast.walk(tree):
-        if isinstance(child, ast.AsyncFunctionDef | ast.FunctionDef) and child.name == node.symbol:
+        if (
+            isinstance(child, ast.AsyncFunctionDef | ast.FunctionDef)
+            and child.name == node.symbol
+        ):
             return child
     return None
 
@@ -1175,7 +1236,9 @@ def _assigned_names(node: ast.Assign | ast.AnnAssign) -> set[str]:
 def _uses_names(node: ast.AST, names: set[str]) -> bool:
     if not names:
         return False
-    return any(isinstance(child, ast.Name) and child.id in names for child in ast.walk(node))
+    return any(
+        isinstance(child, ast.Name) and child.id in names for child in ast.walk(node)
+    )
 
 
 def _contains_call(node: ast.AST, name: str) -> bool:
@@ -1236,10 +1299,15 @@ def _source_tags(
     tags: Iterable[SecurityTag],
     *,
     sink_markers: tuple[str, ...],
+    mitigation_markers: tuple[str, ...],
 ) -> tuple[SecurityTag, ...]:
     sources: list[SecurityTag] = []
     for tag in tags:
-        if tag.kind == "source" and not _matches_any(tag.value, sink_markers):
+        if (
+            tag.kind == "source"
+            and not _matches_any(tag.value, sink_markers)
+            and not _matches_any(tag.value, mitigation_markers)
+        ):
             sources.append(tag)
     return tuple(sources)
 
@@ -1285,7 +1353,45 @@ def _matching_tags(
 
 def _matches_any(value: str, markers: tuple[str, ...]) -> bool:
     lowered = value.lower()
-    return any(marker.lower() in lowered for marker in markers)
+    return any(_tag_value_matches_marker(lowered, marker) for marker in markers)
+
+
+def _tag_value_matches_marker(value: str, marker: str) -> bool:
+    lowered_marker = marker.lower()
+    if value == lowered_marker or value.endswith(f".{lowered_marker}"):
+        return True
+    if _is_prefix_marker(lowered_marker) and value.startswith(lowered_marker):
+        return True
+    if re.search(rf"(?:^|[._-]){re.escape(lowered_marker)}(?:$|[._-])", value):
+        return True
+    if _normalized_name(value) == lowered_marker:
+        return True
+    if any(not char.isalnum() and char not in "._" for char in lowered_marker):
+        return lowered_marker in value
+    return bool(
+        re.search(
+            rf"(?<![a-z0-9_]){re.escape(lowered_marker)}(?![a-z0-9_])",
+            value,
+        )
+    )
+
+
+def _is_prefix_marker(marker: str) -> bool:
+    return marker in {
+        "allowlist",
+        "authorize",
+        "canonical",
+        "check_",
+        "escape",
+        "normalize",
+        "parameterize",
+        "prepare",
+        "require_",
+        "sanitize",
+        "schema",
+        "validate",
+        "whitelist",
+    }
 
 
 def _location_for_node(node: SecurityGraphNode, *, role: str) -> FlowStep:

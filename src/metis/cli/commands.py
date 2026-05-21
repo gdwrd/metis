@@ -12,8 +12,10 @@ from metis.bench import BenchmarkOptions, BenchmarkRegressionError, run_benchmar
 from metis.engine.options import ReviewAgenticOptions, ReviewOptions, TriageOptions
 from metis.engine.research import (
     DEFAULT_RESEARCH_HUNTERS,
+    HunterRegistry,
     HypothesisStatus,
     ResearchOptions,
+    build_parser_inventory,
     generate_research_sarif,
     hypotheses_to_review_results,
     write_research_sarif,
@@ -112,6 +114,8 @@ Type one of the following commands (with arguments):
 - [cyan]bench[/cyan]
 - [cyan]research model[/cyan]
 - [cyan]research graph[/cyan]
+- [cyan]research languages[/cyan]
+- [cyan]research hunters[/cyan]
 - [cyan]variants --from-fix patch.diff[/cyan]
 - [cyan]triage findings.sarif[/cyan]
 - [cyan]update patch.diff[/cyan]
@@ -253,7 +257,7 @@ def run_research(engine, cmd_args, args, runtime: CommandRuntime):
     parser.add_argument(
         "subcommand",
         nargs="?",
-        choices=("model", "graph", "run"),
+        choices=("model", "graph", "run", "languages", "hunters"),
         default="run",
     )
     parser.add_argument("--rebuild", action="store_true")
@@ -280,6 +284,8 @@ Commands:
     run                     Run configured vulnerability research hunters.
     model                   Build or load .metis/security_model.json.
     graph                   Build or load .metis/security_graph.json.
+    languages               List parser/analyzer language coverage.
+    hunters                 List available vulnerability research hunters.
 
 Options:
     --rebuild               Force rebuilding model/graph artifacts.
@@ -301,8 +307,16 @@ Options:
         )
         return
 
-    root = getattr(engine, "codebase_path", None) or engine._config.codebase_path
-    if research_args.subcommand == "graph":
+    root = getattr(engine, "codebase_path", None) or getattr(
+        getattr(engine, "_config", None),
+        "codebase_path",
+        ".",
+    )
+    if research_args.subcommand == "languages":
+        payload = build_parser_inventory(_engine_plugins(engine))
+    elif research_args.subcommand == "hunters":
+        payload = _research_hunter_inventory()
+    elif research_args.subcommand == "graph":
         graph = engine.research.security_graph.load_or_build(
             root,
             rebuild=research_args.rebuild,
@@ -312,7 +326,9 @@ Options:
         hunters = _parse_hunters(
             research_args.hunters
             if research_args.hunters is not None
-            else _runtime_get(runtime, "research_hunters", DEFAULT_RESEARCH_HUNTERS_TEXT)
+            else _runtime_get(
+                runtime, "research_hunters", DEFAULT_RESEARCH_HUNTERS_TEXT
+            )
         )
         persist = True if research_args.persist is None else bool(research_args.persist)
         emit_killed = _research_bool_default(
@@ -354,13 +370,9 @@ Options:
                 proof_artifacts=proof_artifacts,
                 evidence_policy=evidence_policy,
                 hypotheses_path=_optional_cli_path(research_args.hypotheses),
-                evidence_ledger_path=_optional_cli_path(
-                    research_args.evidence_ledger
-                ),
+                evidence_ledger_path=_optional_cli_path(research_args.evidence_ledger),
                 sarif_path=_optional_cli_path(research_args.sarif),
-                research_report_path=_optional_cli_path(
-                    research_args.research_report
-                ),
+                research_report_path=_optional_cli_path(research_args.research_report),
             ),
         )
         payload = result.model_dump(mode="json")
@@ -391,6 +403,53 @@ Options:
         f"[green]Research {escape(str(research_args.subcommand))} complete.[/green]",
         args.quiet,
     )
+
+
+def _engine_plugins(engine) -> list:
+    plugins = getattr(engine, "plugins", None)
+    if plugins is not None:
+        return list(plugins)
+    repository = getattr(engine, "repository", None)
+    config = getattr(repository, "_config", None)
+    if config is None:
+        return []
+    seen: set[int] = set()
+    out = []
+    for plugin in list(getattr(config, "ext_plugin_map", {}).values()):
+        plugin_id = id(plugin)
+        if plugin_id in seen:
+            continue
+        seen.add(plugin_id)
+        out.append(plugin)
+    for _pattern, plugin in getattr(config, "ext_pattern_plugin_map", []):
+        plugin_id = id(plugin)
+        if plugin_id in seen:
+            continue
+        seen.add(plugin_id)
+        out.append(plugin)
+    return out
+
+
+def _research_hunter_inventory() -> dict:
+    registry = HunterRegistry.default()
+    hunters = []
+    for name in registry.available_names():
+        metadata = registry.metadata_for(name)
+        hunters.append(
+            {
+                "name": metadata.name,
+                "vulnerability_class": metadata.vulnerability_class,
+                "supported_languages": list(metadata.supported_languages),
+                "supported_model_tags": list(metadata.supported_model_tags),
+                "required_graph_fields": list(metadata.required_graph_fields),
+                "evidence_obligations": list(metadata.evidence_obligations),
+                "benchmark_classes": list(metadata.benchmark_classes),
+                "rule_families": list(metadata.rule_families),
+                "default_enabled": metadata.default_enabled,
+                "experimental": metadata.experimental,
+            }
+        )
+    return {"hunter_count": len(hunters), "hunters": hunters}
 
 
 def run_variants(engine, cmd_args, args, runtime: CommandRuntime):

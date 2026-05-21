@@ -7,8 +7,19 @@ import yaml
 
 from metis.plugins.c_plugin import CPlugin
 from metis.plugins.cpp_plugin import CppPlugin
+from metis.plugins.extra_plugins import (
+    BashPlugin,
+    CSharpPlugin,
+    JavaPlugin,
+    KotlinPlugin,
+    LuaPlugin,
+    PerlPlugin,
+    ScalaPlugin,
+    SwiftPlugin,
+)
 from metis.plugins.go_plugin import GoPlugin
 from metis.plugins.javascript_plugin import JavaScriptPlugin
+from metis.plugins.php_plugin import PHPPlugin
 from metis.plugins.python_plugin import PythonPlugin
 from metis.plugins.ruby_plugin import RubyPlugin
 from metis.plugins.rust_plugin import RustPlugin
@@ -28,6 +39,14 @@ def test_roadmap_plugins_declare_function_node_types():
         CPlugin({}),
         CppPlugin({}),
         JavaScriptPlugin({}),
+        JavaPlugin({}),
+        CSharpPlugin({}),
+        KotlinPlugin({}),
+        SwiftPlugin({}),
+        ScalaPlugin({}),
+        BashPlugin({}),
+        LuaPlugin({}),
+        PerlPlugin({}),
     ]
 
     for plugin in plugins:
@@ -47,6 +66,14 @@ def test_roadmap_plugins_expose_generic_analyzer_config():
         SolidityPlugin({}),
         RubyPlugin({}),
         JavaScriptPlugin({}),
+        JavaPlugin({}),
+        CSharpPlugin({}),
+        KotlinPlugin({}),
+        SwiftPlugin({}),
+        ScalaPlugin({}),
+        BashPlugin({}),
+        LuaPlugin({}),
+        PerlPlugin({}),
     ]
 
     for plugin in plugins:
@@ -80,7 +107,21 @@ def test_discovered_plugins_include_builtin_research_languages():
 
     names = {plugin.get_name() for plugin in load_plugins(config)}
 
-    assert {"ruby", "solidity"} <= names
+    assert {
+        "bash",
+        "csharp",
+        "dockerfile",
+        "java",
+        "json",
+        "kotlin",
+        "lua",
+        "perl",
+        "ruby",
+        "scala",
+        "solidity",
+        "swift",
+        "yaml",
+    } <= names
 
 
 def test_c_plugin_exposes_phase6_native_and_hardware_analyzer_markers():
@@ -90,3 +131,15 @@ def test_c_plugin_exposes_phase6_native_and_hardware_analyzer_markers():
     assert "refcount_dec_and_test" in config["lifetime_guard_names"]
     assert "mmio_write" in config["hardware_sink_names"]
     assert "is_privileged" in config["hardware_guard_names"]
+
+
+def test_parser_coverage_extensions_include_common_cpp_and_php_variants():
+    config = yaml.safe_load(
+        Path("src/metis/plugins/plugins.yaml").read_text(encoding="utf-8")
+    )
+
+    cpp_extensions = set(CppPlugin(config).get_supported_extensions())
+    php_extensions = set(PHPPlugin(config).get_supported_extensions())
+
+    assert {".cc", ".cxx", ".c++", ".hh", ".hxx", ".hhp", ".ipp"} <= cpp_extensions
+    assert ".inc" in php_extensions

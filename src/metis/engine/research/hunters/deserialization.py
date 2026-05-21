@@ -3,10 +3,8 @@
 
 from __future__ import annotations
 
-from metis.engine.research.hunters.graph_pattern import (
-    GraphPatternHunter,
-    GraphPatternSpec,
-)
+from metis.engine.research.hunters._rule_graph import rule_graph_spec
+from metis.engine.research.hunters.graph_pattern import GraphPatternHunter
 
 
 class DeserializationHunter(GraphPatternHunter):
@@ -15,30 +13,17 @@ class DeserializationHunter(GraphPatternHunter):
 
     def __init__(self) -> None:
         super().__init__(
-            GraphPatternSpec(
+            rule_graph_spec(
                 name=self.name,
-                vulnerability_class=self.vulnerability_class,
+                family="deserialization",
                 title="Unsafe deserialization path",
                 sink_obligation="deserialization_sink",
                 missing_mitigation_obligation="missing_type_or_integrity_guard",
                 mitigation_label="type allowlist or integrity guard",
-                sink_markers=(
-                    "pickle.loads",
-                    "yaml.load",
-                    "marshal.load",
-                    "loads",
-                    "deserialize",
-                    "unserialize",
-                ),
-                mitigation_markers=(
-                    "allowlist",
-                    "validate",
-                    "signature",
-                    "integrity",
-                ),
                 impact=(
                     "Attacker-controlled serialized data may reach an unsafe "
                     "deserialization sink without type or integrity checks."
                 ),
+                default_enabled=True,
             )
         )

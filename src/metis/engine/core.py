@@ -126,7 +126,7 @@ class MetisEngine:
         for plugin in self.plugins:
             for extension in plugin.get_supported_extensions():
                 lowered = extension.lower()
-                if "*" in lowered:
+                if "*" in lowered or not lowered.startswith("."):
                     self.ext_pattern_plugin_map.append((lowered, plugin))
                     continue
                 self.code_exts.add(lowered)

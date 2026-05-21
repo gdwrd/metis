@@ -87,6 +87,8 @@ class MemoryLifetimeHunter:
         required_graph_fields=("nodes", "tags", "metadata"),
         evidence_obligations=MEMORY_LIFETIME_OBLIGATIONS,
         benchmark_classes=(vulnerability_class,),
+        rule_families=("memory_lifetime",),
+        default_enabled=True,
     )
 
     def hunt(

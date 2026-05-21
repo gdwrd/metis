@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Literal, cast
 
 from metis.cli.command_registry import COMMANDS
+from metis.engine.research import HunterRegistry
 
 TuiCommandName = Literal[
     "index",
@@ -206,6 +207,7 @@ def parse_research_command_options(args: tuple[str, ...]) -> TuiResearchCommandO
             hunters = tuple(item.strip() for item in raw.split(",") if item.strip())
             if not hunters:
                 raise ValueError("/research --hunters requires a comma-separated list.")
+            HunterRegistry.default().select(hunters)
             idx += 2
             continue
         if arg == "--rebuild":

@@ -98,6 +98,8 @@ class HardwareSecurityHunter:
         required_graph_fields=("nodes", "tags", "metadata"),
         evidence_obligations=HARDWARE_SECURITY_OBLIGATIONS,
         benchmark_classes=(vulnerability_class,),
+        rule_families=("hardware_security",),
+        default_enabled=True,
     )
 
     def hunt(

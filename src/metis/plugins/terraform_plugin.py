@@ -6,5 +6,5 @@ from metis.plugins.base import ConfigBackedLanguagePlugin
 
 class TerraformPlugin(ConfigBackedLanguagePlugin):
     NAME = "terraform"
-    DEFAULT_EXTENSIONS = [".tf"]
+    DEFAULT_EXTENSIONS = [".tf", ".tfvars", ".hcl"]
     DEFAULT_TEST_PATH_PATTERNS = ["**/tests/**"]

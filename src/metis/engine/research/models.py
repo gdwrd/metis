@@ -13,15 +13,23 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 
 RESEARCH_SCHEMA_VERSION = "1"
-SECURITY_GRAPH_SCHEMA_VERSION = "1"
-PROJECT_SECURITY_MODEL_SCHEMA_VERSION = "1"
+SECURITY_GRAPH_SCHEMA_VERSION = "2"
+PROJECT_SECURITY_MODEL_SCHEMA_VERSION = "2"
 DEFAULT_RESEARCH_HUNTERS = (
     "authz_outlier",
+    "command_injection",
+    "code_injection",
+    "crypto_misuse",
+    "template_injection",
     "sql_injection",
     "injection_path",
+    "nosql_injection",
     "path_traversal",
     "ssrf",
     "deserialization",
+    "xss",
+    "xxe",
+    "iac_exposure",
     "memory_lifetime",
     "hardware_security",
 )
@@ -231,8 +239,7 @@ class Hypothesis(BaseModel):
                     + ", ".join(missing)
                 )
             if any(
-                entry.status == EvidenceStatus.MISSING
-                and entry.obligation in required
+                entry.status == EvidenceStatus.MISSING and entry.obligation in required
                 for entry in self.evidence
             ):
                 raise ValueError(
@@ -573,8 +580,7 @@ class HypothesisQuery(BaseModel):
         if self.priorities and hypothesis.priority not in self.priorities:
             return False
         if self.file and not any(
-            step.file == self.file
-            for step in [*hypothesis.locations, *hypothesis.path]
+            step.file == self.file for step in [*hypothesis.locations, *hypothesis.path]
         ):
             return False
         if self.symbol and not any(
@@ -753,3 +759,4 @@ class ProjectSecurityModel(BaseModel):
     sanitizers: list[SecurityModelEntry] = Field(default_factory=list)
     frameworks: list[SecurityModelEntry] = Field(default_factory=list)
     lessons: list[SecurityModelEntry] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)

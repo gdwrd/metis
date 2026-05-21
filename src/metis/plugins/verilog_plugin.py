@@ -8,5 +8,16 @@ class VerilogPlugin(ConfigBackedLanguagePlugin):
     """Language plugin providing Verilog-specific splitter and prompts."""
 
     NAME = "verilog"
-    DEFAULT_EXTENSIONS = [".v", ".vh"]
+    DEFAULT_EXTENSIONS = [".v", ".vh", ".v.*", ".vh.*"]
     DEFAULT_TEST_PATH_PATTERNS = ["*_tb.v", "*_tb.vh", "tb_*.v"]
+
+    def get_function_node_types(self) -> dict[str, list[str]]:
+        return {
+            "function": [
+                "module_declaration",
+                "function_declaration",
+                "task_declaration",
+            ],
+            "call": ["subroutine_call", "system_tf_call"],
+            "name": ["name", "identifier"],
+        }

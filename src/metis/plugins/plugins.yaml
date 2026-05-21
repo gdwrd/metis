@@ -203,6 +203,103 @@ plugins:
         {patch}\n
         Please update the patch file so that is fixes these vulnerabilities.
         Do not include any commentary—only output the patch diff.
+  java:
+    supported_extensions: [".java"]
+    analyzer:
+      function_node_types: ["method_declaration", "constructor_declaration"]
+      call_node_types: ["method_invocation", "object_creation_expression"]
+      name_fields: ["name"]
+      call_name_fields: ["function", "name", "type"]
+      import_node_types: ["import_declaration"]
+    splitting: &general_code_splitting
+      chunk_lines: 40
+      chunk_lines_overlap: 15
+      max_chars: 1500
+    prompts: &general_code_prompts
+      security_review_file: |-
+        You are a thorough security engineer. Review FILE for externally controlled data reaching security-sensitive operations. Return only evidence-backed findings.
+      snippet_security_summary: |-
+        Summarize the evidence-backed security impact in one compact paragraph.
+  csharp:
+    supported_extensions: [".cs"]
+    analyzer:
+      function_node_types: ["method_declaration", "constructor_declaration"]
+      call_node_types: ["invocation_expression", "object_creation_expression"]
+      name_fields: ["name"]
+      call_name_fields: ["function", "callee", "name", "type"]
+      import_node_types: ["using_directive"]
+    splitting: *general_code_splitting
+    prompts: *general_code_prompts
+  kotlin:
+    supported_extensions: [".kt", ".kts"]
+    analyzer:
+      function_node_types: ["function_declaration"]
+      call_node_types: ["call_expression"]
+      name_fields: ["name"]
+      call_name_fields: ["function", "callee", "name"]
+      import_node_types: ["import_header"]
+    splitting: *general_code_splitting
+    prompts: *general_code_prompts
+  swift:
+    supported_extensions: [".swift"]
+    analyzer:
+      function_node_types: ["function_declaration"]
+      call_node_types: ["call_expression"]
+      name_fields: ["name", "simple_identifier"]
+      call_name_fields: ["function", "called_expression", "name", "simple_identifier"]
+      import_node_types: ["import_declaration"]
+    splitting: *general_code_splitting
+    prompts: *general_code_prompts
+  scala:
+    supported_extensions: [".scala", ".sc"]
+    analyzer:
+      function_node_types: ["function_definition"]
+      call_node_types: ["call_expression"]
+      name_fields: ["name", "identifier"]
+      call_name_fields: ["function", "callee", "name", "identifier"]
+      import_node_types: ["import_declaration"]
+    splitting: *general_code_splitting
+    prompts: *general_code_prompts
+  bash:
+    supported_extensions: [".sh", ".bash", ".bats"]
+    analyzer:
+      function_node_types: ["function_definition"]
+      call_node_types: ["command"]
+      name_fields: ["name", "word"]
+      call_name_fields: ["command", "name", "word"]
+    splitting: *general_code_splitting
+    prompts: *general_code_prompts
+  lua:
+    supported_extensions: [".lua"]
+    analyzer:
+      function_node_types: ["function_declaration"]
+      call_node_types: ["function_call"]
+      name_fields: ["name", "identifier"]
+      call_name_fields: ["function", "name", "identifier"]
+    splitting: *general_code_splitting
+    prompts: *general_code_prompts
+  perl:
+    supported_extensions: [".pl", ".pm", ".cgi"]
+    analyzer:
+      function_node_types: ["subroutine_declaration_statement"]
+      call_node_types: ["subroutine_call_expression", "call_expression"]
+      name_fields: ["name", "bareword"]
+      call_name_fields: ["function", "name", "bareword"]
+      import_node_types: ["use_statement", "require_statement"]
+    splitting: *general_code_splitting
+    prompts: *general_code_prompts
+  dockerfile:
+    supported_extensions: [".dockerfile", "dockerfile"]
+    splitting: *general_code_splitting
+    prompts: *general_code_prompts
+  yaml:
+    supported_extensions: [".yaml", ".yml"]
+    splitting: *general_code_splitting
+    prompts: *general_code_prompts
+  json:
+    supported_extensions: [".json"]
+    splitting: *general_code_splitting
+    prompts: *general_code_prompts
   systemverilog:
     supported_extensions: [".sv", ".svh", ".sv.*", ".svh.*"]
     splitting:
@@ -376,7 +473,7 @@ plugins:
         Please update the patch so it fixes these issues.
         Output ONLY the patch diff, with minimal changes.
   cpp:
-    supported_extensions: [".cpp", ".hpp"]
+    supported_extensions: [".cc", ".cpp", ".cxx", ".c++", ".hpp", ".hh", ".hxx", ".hhp", ".ipp"]
     splitting: *c_cpp_splitting
     prompts: *c_cpp_prompts
   tablegen:
@@ -806,7 +903,7 @@ plugins:
            - Review the security implications of the FILE.
         [[RELEVANT_CONTEXT_UNINDENTED]]
   terraform:
-    supported_extensions: [".tf"]
+    supported_extensions: [".tf", ".tfvars", ".hcl"]
     splitting:
       chunk_lines: 40
       chunk_lines_overlap: 15
@@ -859,7 +956,13 @@ plugins:
            - Review the security implications of the FILE.
         [[RELEVANT_CONTEXT_UNINDENTED]]
   php:
-    supported_extensions: [".php", ".phps", ".phtm", ".phtml", ".phpt", ".pht", ".php2", ".php3", ".php4", ".php5", ".php6", ".php7", ".php8"]
+    supported_extensions: [".php", ".phps", ".phtm", ".phtml", ".phpt", ".pht", ".php2", ".php3", ".php4", ".php5", ".php6", ".php7", ".php8", ".inc"]
+    analyzer:
+      function_node_types: ["function_definition", "method_declaration", "anonymous_function_creation_expression"]
+      call_node_types: ["function_call_expression", "member_call_expression"]
+      name_fields: ["name", "function", "member"]
+      call_name_fields: ["function", "callee", "name", "member"]
+      import_node_types: ["namespace_use_declaration"]
     splitting:
       chunk_lines: 40
       chunk_lines_overlap: 15

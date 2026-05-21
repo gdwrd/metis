@@ -266,30 +266,98 @@ def test_run_benchmark_research_quick_manifest_covers_all_hunters(engine):
 
     assert review_calls == []
     assert result["mode"] == "review+research"
-    assert result["case_count"] == 7
+    assert result["case_count"] == 26
     assert result["case_ids"] == [
         "internal-authz-outlier-001",
         "internal-injection-path-001",
+        "internal-command-injection-001",
+        "internal-command-injection-js-001",
+        "internal-command-injection-php-001",
+        "internal-command-injection-java-csharp-001",
+        "internal-command-injection-go-ruby-bash-001",
+        "internal-code-injection-001",
+        "internal-code-injection-js-php-ruby-001",
+        "internal-sql-injection-js-ts-001",
+        "internal-sql-injection-php-001",
+        "internal-sql-injection-java-csharp-001",
+        "internal-sql-injection-go-ruby-001",
+        "internal-nosql-injection-001",
+        "internal-xxe-001",
+        "internal-xss-001",
+        "internal-secrets-exposure-001",
+        "internal-crypto-misuse-001",
+        "internal-evm-external-call-001",
+        "internal-template-injection-001",
         "internal-path-traversal-001",
         "internal-ssrf-001",
         "internal-deserialization-001",
+        "internal-iac-exposure-001",
         "internal-memory-lifetime-001",
         "internal-hardware-security-001",
     ]
-    assert result["hypotheses"]["generated"] == 28
-    assert result["hypotheses"]["proven"] == 11
-    assert result["hypotheses"]["killed"] == 10
-    assert result["hypotheses"]["unresolved"] == 7
+    assert result["hypotheses"]["generated"] == 97
+    assert result["hypotheses"]["proven"] == 47
+    assert result["hypotheses"]["killed"] == 41
+    assert result["hypotheses"]["unresolved"] == 9
     assert result["hypotheses"]["proven_recall_by_class"] == {
+        "CWE-327": 1.0,
+        "CWE-611": 1.0,
+        "CWE-79": 1.0,
+        "CWE-798": 1.0,
+        "CWE-841": 1.0,
         "CWE-1262": 1.0,
+        "CWE-1336": 1.0,
         "CWE-22": 1.0,
+        "CWE-284": 1.0,
         "CWE-416": 1.0,
         "CWE-502": 1.0,
         "CWE-74": 1.0,
+        "CWE-78": 1.0,
         "CWE-862": 1.0,
+        "CWE-89": 1.0,
         "CWE-918": 1.0,
+        "CWE-943": 1.0,
+        "CWE-94": 1.0,
     }
-    assert result["hypotheses"]["false_positive_rate"] == 0.0
+    assert result["hypotheses"]["by_language"]["python"]["proven_recall"] == 1.0
+    assert result["hypotheses"]["by_language"]["c"]["proven_recall"] == 1.0
+    assert result["hypotheses"]["by_language"]["javascript"]["proven_recall"] == 1.0
+    assert result["hypotheses"]["by_language"]["php"]["proven_recall"] == 1.0
+    assert result["hypotheses"]["by_language"]["java_csharp"]["proven_recall"] == 1.0
+    assert result["hypotheses"]["by_language"]["javascript_python"][
+        "proven_recall"
+    ] == 1.0
+    assert result["hypotheses"]["by_language"]["python_java"]["proven_recall"] == 1.0
+    assert (
+        result["hypotheses"]["by_language"]["terraform_json"]["proven_recall"] == 1.0
+    )
+    assert (
+        result["hypotheses"]["by_hunter"]["command_injection"]["proven_recall"] == 1.0
+    )
+    assert (
+        result["hypotheses"]["by_hunter"]["code_injection"]["false_positive_rate"]
+        == 0.0
+    )
+    assert (
+        result["hypotheses"]["by_hunter"]["sql_injection"]["false_positive_rate"] == 0.0
+    )
+    assert (
+        result["hypotheses"]["by_hunter"]["nosql_injection"]["false_positive_rate"]
+        == 0.0
+    )
+    assert result["hypotheses"]["by_hunter"]["xss"]["false_positive_rate"] == 0.0
+    assert result["hypotheses"]["by_hunter"]["xxe"]["false_positive_rate"] == 0.0
+    assert (
+        result["hypotheses"]["by_language_cwe"]["python|CWE-78"]["proven_recall"] == 1.0
+    )
+    assert (
+        result["hypotheses"]["by_language_cwe"]["javascript_typescript|CWE-89"][
+            "proven_recall"
+        ]
+        == 1.0
+    )
+    assert result["hypotheses"]["missing_coverage"] == []
+    assert result["hypotheses"]["false_positive_rate"] < 0.03
     assert result["hypotheses"]["evidence_completeness_rate"] < 1.0
 
 
@@ -402,9 +470,7 @@ cases:
         if root.endswith("case-a"):
             return {
                 "generated": [],
-                "metric_summary": {
-                    "lessons": {"lesson_refs": ["lesson-suppressed-a"]}
-                },
+                "metric_summary": {"lessons": {"lesson_refs": ["lesson-suppressed-a"]}},
             }
         return {
             "generated": [
@@ -415,9 +481,7 @@ cases:
                     "risky",
                 )
             ],
-            "metric_summary": {
-                "lessons": {"lesson_refs": ["lesson-suppressed-b"]}
-            },
+            "metric_summary": {"lessons": {"lesson_refs": ["lesson-suppressed-b"]}},
         }
 
     result = run_benchmark(

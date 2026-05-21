@@ -28,7 +28,7 @@ def generate_research_sarif(
     tool_name: str = "Metis Research",
     automation_id: str = "metis-research-run-1",
 ) -> dict[str, Any]:
-    return generate_sarif(
+    sarif = generate_sarif(
         hypotheses_to_review_results(
             hypotheses,
             evidence_ledger_path=evidence_ledger_path,
@@ -37,6 +37,8 @@ def generate_research_sarif(
         tool_name=tool_name,
         automation_id=automation_id,
     )
+    _specialize_research_rules(sarif)
+    return sarif
 
 
 def write_research_sarif(
@@ -142,6 +144,8 @@ def _hypothesis_properties(
         "metisHypothesisStatus": hypothesis.status.value,
         "metisHunter": hypothesis.hunter,
         "metisResearchClass": hypothesis.vulnerability_class,
+        "metisSarifRuleId": _sarif_rule_id_for(hypothesis),
+        "metisSarifRuleTitle": hypothesis.title,
         "metisEvidenceLedger": evidence_ledger_path,
         "metisEvidenceObligations": [
             obligation.name for obligation in hypothesis.evidence_obligations
@@ -151,6 +155,7 @@ def _hypothesis_properties(
         "metisObservedGuard": hypothesis.observed_guard,
         "metisMissingGuard": hypothesis.missing_guard,
         "metisProofArtifacts": _proof_artifacts(hypothesis),
+        "metisProofDecision": _proof_decision(hypothesis),
         "metisLessonsUsed": list(hypothesis.lesson_refs),
         "metisEvidenceReferences": [
             _evidence_reference(entry) for entry in _owned_evidence(hypothesis)
@@ -198,6 +203,97 @@ def _proof_artifacts(hypothesis: Hypothesis) -> list[str]:
         ):
             artifacts.append(entry.file)
     return sorted(dict.fromkeys(artifacts))
+
+
+def _proof_decision(hypothesis: Hypothesis) -> dict[str, Any] | None:
+    proof_entries = [
+        entry
+        for entry in _owned_evidence(hypothesis)
+        if entry.obligation == "proof_artifact"
+    ]
+    satisfied = [
+        entry
+        for entry in proof_entries
+        if entry.kind == EvidenceKind.PROOF_ARTIFACT
+        and entry.status == EvidenceStatus.SATISFIED
+    ]
+    if satisfied:
+        return {
+            "status": "generated",
+            "artifact_paths": _proof_artifacts(hypothesis),
+        }
+    no_proof = [
+        entry for entry in proof_entries if entry.tool == "local_proof_generator"
+    ]
+    if no_proof:
+        entry = no_proof[-1]
+        return {
+            "status": "no_proof",
+            "reason": entry.claim.removeprefix("No local proof artifact generated: "),
+        }
+    return None
+
+
+def _sarif_rule_id_for(hypothesis: Hypothesis) -> str:
+    return str(hypothesis.sarif_rule_id or hypothesis.vulnerability_class)
+
+
+def _specialize_research_rules(sarif: dict[str, Any]) -> None:
+    runs = sarif.get("runs")
+    if not isinstance(runs, list) or not runs:
+        return
+    run = runs[0]
+    results = run.get("results")
+    if not isinstance(results, list):
+        return
+    rules: dict[str, dict[str, Any]] = {}
+    for result in results:
+        if not isinstance(result, dict):
+            continue
+        properties = result.get("properties")
+        if not isinstance(properties, dict):
+            continue
+        rule_id = str(properties.get("metisSarifRuleId") or "").strip()
+        if not rule_id:
+            continue
+        title = str(properties.get("metisSarifRuleTitle") or rule_id)
+        cwe = str(properties.get("metisResearchClass") or rule_id)
+        result["ruleId"] = rule_id
+        message = result.get("message")
+        if isinstance(message, dict):
+            message["id"] = rule_id
+        rules.setdefault(
+            rule_id,
+            {
+                "id": rule_id,
+                "name": rule_id.replace("-", ""),
+                "shortDescription": {"text": title, "markdown": title},
+                "fullDescription": {
+                    "text": f"Metis research hypothesis for {cwe}.",
+                    "markdown": f"Metis research hypothesis for {cwe}.",
+                },
+                "defaultConfiguration": {"level": result.get("level", "warning")},
+                "properties": {
+                    "tags": [cwe],
+                    "precision": "high",
+                },
+            },
+        )
+    if not rules:
+        return
+    tool = run.setdefault("tool", {})
+    driver = tool.setdefault("driver", {})
+    existing = driver.get("rules")
+    preserved = (
+        [
+            rule
+            for rule in existing
+            if isinstance(rule, dict) and str(rule.get("id") or "") not in rules
+        ]
+        if isinstance(existing, list)
+        else []
+    )
+    driver["rules"] = [*preserved, *rules.values()]
 
 
 def _owned_evidence(hypothesis: Hypothesis) -> list[EvidenceLedgerEntry]:

@@ -163,7 +163,7 @@ def test_local_proof_generator_skips_non_proven_hypotheses(engine, tmp_path):
         for decision in proof_result.decisions
         if decision.status == "skipped"
     ]
-    assert len(skipped) == 2
+    assert len(skipped) == 3
     assert {item.reason for item in skipped} == {
         "status is killed",
         "status is unresolved",

@@ -54,6 +54,10 @@ dev = [
   "metis[lint]"
 ]
 
+[tool.ruff.lint.per-file-ignores]
+"tests/benchmarks/cases/research/**/*.py" = ["F821", "F841"]
+"tests/fixtures/research/**/*.py" = ["F821", "F841"]
+
 [tool.setuptools]
 include-package-data = true
 
@@ -78,3 +82,14 @@ php = "metis.plugins.php_plugin:PHPPlugin"
 javascript = "metis.plugins.javascript_plugin:JavaScriptPlugin"
 systemverilog = "metis.plugins.systemverilog_plugin:SystemVerilogPlugin"
 verilog = "metis.plugins.verilog_plugin:VerilogPlugin"
+java = "metis.plugins.extra_plugins:JavaPlugin"
+csharp = "metis.plugins.extra_plugins:CSharpPlugin"
+kotlin = "metis.plugins.extra_plugins:KotlinPlugin"
+swift = "metis.plugins.extra_plugins:SwiftPlugin"
+scala = "metis.plugins.extra_plugins:ScalaPlugin"
+bash = "metis.plugins.extra_plugins:BashPlugin"
+lua = "metis.plugins.extra_plugins:LuaPlugin"
+perl = "metis.plugins.extra_plugins:PerlPlugin"
+dockerfile = "metis.plugins.extra_plugins:DockerfilePlugin"
+yaml = "metis.plugins.extra_plugins:YamlPlugin"
+json = "metis.plugins.extra_plugins:JsonPlugin"

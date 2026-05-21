@@ -153,7 +153,10 @@ class LocalProofGenerator:
     ) -> "_GeneratedProof":
         if hypothesis.status != HypothesisStatus.PROVEN:
             return _GeneratedProof(
-                hypothesis=hypothesis,
+                hypothesis=_with_no_proof_evidence(
+                    hypothesis,
+                    reason=f"status is {hypothesis.status.value}",
+                ),
                 decision=ProofDecision(
                     hypothesis_id=hypothesis.id,
                     status="skipped",
@@ -164,7 +167,7 @@ class LocalProofGenerator:
         refusal = self._refusal_reason(hypothesis)
         if refusal:
             return _GeneratedProof(
-                hypothesis=hypothesis,
+                hypothesis=_with_no_proof_evidence(hypothesis, reason=refusal),
                 decision=ProofDecision(
                     hypothesis_id=hypothesis.id,
                     status="refused",
@@ -174,50 +177,54 @@ class LocalProofGenerator:
 
         location = _primary_location(hypothesis)
         if location is None or not location.file or not location.symbol:
+            reason = "missing source location or symbol"
             return _GeneratedProof(
-                hypothesis=hypothesis,
+                hypothesis=_with_no_proof_evidence(hypothesis, reason=reason),
                 decision=ProofDecision(
                     hypothesis_id=hypothesis.id,
                     status="refused",
-                    reason="missing source location or symbol",
+                    reason=reason,
                 ),
             )
 
         safe_id = _safe_hypothesis_dir_name(hypothesis.id)
         if safe_id is None:
+            reason = "hypothesis id is not safe for a proof artifact path"
             return _GeneratedProof(
-                hypothesis=hypothesis,
+                hypothesis=_with_no_proof_evidence(hypothesis, reason=reason),
                 decision=ProofDecision(
                     hypothesis_id=hypothesis.id,
                     status="refused",
-                    reason="hypothesis id is not safe for a proof artifact path",
+                    reason=reason,
                 ),
             )
 
         try:
             source_path = self._resolve_source(root_path, location.file)
         except ValueError as exc:
+            reason = str(exc)
             return _GeneratedProof(
-                hypothesis=hypothesis,
+                hypothesis=_with_no_proof_evidence(hypothesis, reason=reason),
                 decision=ProofDecision(
                     hypothesis_id=hypothesis.id,
                     status="refused",
-                    reason=str(exc),
+                    reason=reason,
                 ),
             )
 
         source_ref = self._relative_to_codebase(source_path)
         source_suffix = source_path.suffix.lower()
         if source_suffix != ".py" and source_suffix not in _STATIC_SOURCE_EXTENSIONS:
+            reason = (
+                "only Python, native, and hardware static local proofs "
+                "are currently supported"
+            )
             return _GeneratedProof(
-                hypothesis=hypothesis,
+                hypothesis=_with_no_proof_evidence(hypothesis, reason=reason),
                 decision=ProofDecision(
                     hypothesis_id=hypothesis.id,
                     status="refused",
-                    reason=(
-                        "only Python, native, and hardware static local proofs "
-                        "are currently supported"
-                    ),
+                    reason=reason,
                 ),
             )
 
@@ -243,12 +250,13 @@ class LocalProofGenerator:
             )
 
         if not artifacts:
+            reason = "no safe local proof artifact template matched"
             return _GeneratedProof(
-                hypothesis=hypothesis,
+                hypothesis=_with_no_proof_evidence(hypothesis, reason=reason),
                 decision=ProofDecision(
                     hypothesis_id=hypothesis.id,
                     status="refused",
-                    reason="no safe local proof artifact template matched",
+                    reason=reason,
                 ),
             )
 
@@ -511,6 +519,41 @@ def _safe_hypothesis_dir_name(hypothesis_id: str) -> str | None:
     if ".." in hypothesis_id or "/" in hypothesis_id or "\\" in hypothesis_id:
         return None
     return hypothesis_id
+
+
+def _with_no_proof_evidence(hypothesis: Hypothesis, *, reason: str) -> Hypothesis:
+    entry = EvidenceLedgerEntry(
+        hypothesis_id=hypothesis.id,
+        obligation="proof_artifact",
+        status=EvidenceStatus.NOT_APPLICABLE,
+        kind=EvidenceKind.NEGATIVE_EVIDENCE,
+        claim=f"No local proof artifact generated: {reason}",
+        evidence=[f"reason={reason}"],
+        file=_decision_file_for(hypothesis),
+        line=_decision_line_for(hypothesis),
+        symbol=_decision_symbol_for(hypothesis),
+        tool="local_proof_generator",
+        tool_input=hypothesis.id,
+        source_trust=SourceTrust.TOOL_OUTPUT,
+    )
+    return hypothesis.model_copy(
+        update={"evidence": [*hypothesis.evidence, entry], "updated_at": utc_now()}
+    )
+
+
+def _decision_file_for(hypothesis: Hypothesis) -> str | None:
+    location = _primary_location(hypothesis)
+    return location.file if location is not None else None
+
+
+def _decision_line_for(hypothesis: Hypothesis) -> int | None:
+    location = _primary_location(hypothesis)
+    return location.line if location is not None else None
+
+
+def _decision_symbol_for(hypothesis: Hypothesis) -> str | None:
+    location = _primary_location(hypothesis)
+    return location.symbol if location is not None else None
 
 
 def _require_inside(path: Path, root: Path, *, purpose: str) -> None:

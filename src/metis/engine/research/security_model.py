@@ -51,6 +51,8 @@ class ProjectSecurityModelService:
                 and model.schema_version == PROJECT_SECURITY_MODEL_SCHEMA_VERSION
                 and model.analysis_root == graph.analysis_root
                 and model.file_hashes == graph.file_hashes
+                and model.metadata.get("graph_capability_fingerprint")
+                == graph.metadata.get("capability_fingerprint")
             ):
                 return self._with_lessons(model, lessons)
         return self.build(graph, lessons=lessons)
@@ -137,6 +139,7 @@ class ProjectSecurityModelService:
             sanitizers=_dedupe_entries(sanitizers),
             frameworks=_dedupe_entries(frameworks),
             lessons=_lesson_entries(lessons),
+            metadata=_model_metadata_for_graph(graph),
         )
         self.write(model)
         return model
@@ -156,7 +159,9 @@ class ProjectSecurityModelService:
         graph: SecurityGraph,
         root: str | Path | None,
     ) -> None:
-        candidate = graph.analysis_root or root or self._repository._config.codebase_path
+        candidate = (
+            graph.analysis_root or root or self._repository._config.codebase_path
+        )
         self._repository.resolve_inside_codebase(
             candidate,
             purpose="Security model graph root",
@@ -180,6 +185,15 @@ def _tags_by_kind(node: SecurityGraphNode) -> dict[str, list[SecurityTag]]:
     for tag in node.tags:
         tags.setdefault(tag.kind, []).append(tag)
     return tags
+
+
+def _model_metadata_for_graph(graph: SecurityGraph) -> dict:
+    return {
+        "graph_schema_version": graph.schema_version,
+        "graph_capability_version": graph.metadata.get("capability_version"),
+        "graph_capability_fingerprint": graph.metadata.get("capability_fingerprint"),
+        "graph_source": graph.metadata.get("source"),
+    }
 
 
 def _entry_from_tag(

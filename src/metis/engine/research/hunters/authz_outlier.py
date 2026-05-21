@@ -77,6 +77,7 @@ class AuthzOutlierHunter:
         required_graph_fields=("nodes", "tags", "metadata"),
         evidence_obligations=AUTHZ_OBLIGATION_NAMES,
         benchmark_classes=(vulnerability_class,),
+        default_enabled=True,
     )
 
     def __init__(

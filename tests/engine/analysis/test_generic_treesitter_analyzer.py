@@ -5,6 +5,7 @@ from pathlib import Path
 
 from metis.engine.analysis.base import AnalyzerRequest
 from metis.engine.analysis.generic_treesitter_analyzer import GenericTreeSitterAnalyzer
+from metis.plugins.extra_plugins import BashPlugin, CSharpPlugin, JavaPlugin, LuaPlugin
 from metis.plugins.go_plugin import GoPlugin
 from metis.plugins.javascript_plugin import JavaScriptPlugin
 from metis.plugins.python_plugin import PythonPlugin
@@ -75,14 +76,12 @@ def test_python_generic_analyzer_resolves_unresolved_hop_across_codebase(tmp_pat
     _write(
         root,
         "src/app.py",
-        "def handler(value):\n"
-        "    return normalize(value)\n",
+        "def handler(value):\n    return normalize(value)\n",
     )
     _write(
         root,
         "src/helpers.py",
-        "def normalize(value):\n"
-        "    return value\n",
+        "def normalize(value):\n    return value\n",
     )
 
     out = _analyzer(root, PythonPlugin({})).collect_evidence(
@@ -138,9 +137,7 @@ def test_go_generic_analyzer_builds_call_graph(tmp_path):
         "func handler(value string) string { return sink(value) }\n",
     )
 
-    out = _analyzer(root, GoPlugin({})).collect_evidence(
-        _request(root, "main.go", 3)
-    )
+    out = _analyzer(root, GoPlugin({})).collect_evidence(_request(root, "main.go", 3))
 
     assert out.supported is True
     assert any("handler calls 'sink'" in step for step in out.flow_chain)
@@ -177,6 +174,75 @@ def test_solidity_generic_analyzer_builds_call_graph(tmp_path):
     out = _analyzer(root, SolidityPlugin({})).collect_evidence(
         _request(root, "contracts/App.sol", 3)
     )
+
+    assert out.supported is True
+    assert any("handler calls 'sink'" in step for step in out.flow_chain)
+
+
+def test_java_generic_analyzer_builds_call_graph(tmp_path):
+    root = tmp_path / "repo"
+    _write(
+        root,
+        "src/App.java",
+        "class App {\n"
+        "  static String sink(String value) { return value; }\n"
+        "  static String handler(String value) { return sink(value); }\n"
+        "}\n",
+    )
+
+    out = _analyzer(root, JavaPlugin({})).collect_evidence(
+        _request(root, "src/App.java", 3)
+    )
+
+    assert out.supported is True
+    assert any("handler calls 'sink'" in step for step in out.flow_chain)
+
+
+def test_csharp_generic_analyzer_builds_call_graph(tmp_path):
+    root = tmp_path / "repo"
+    _write(
+        root,
+        "src/App.cs",
+        "class App {\n"
+        "  static string Sink(string value) { return value; }\n"
+        "  static string Handler(string value) { return Sink(value); }\n"
+        "}\n",
+    )
+
+    out = _analyzer(root, CSharpPlugin({})).collect_evidence(
+        _request(root, "src/App.cs", 3)
+    )
+
+    assert out.supported is True
+    assert any("Handler calls 'Sink'" in step for step in out.flow_chain)
+
+
+def test_bash_generic_analyzer_builds_call_graph(tmp_path):
+    root = tmp_path / "repo"
+    _write(
+        root,
+        "scripts/app.sh",
+        'sink() {\n  printf \'%s\' "$1"\n}\nhandler() {\n  sink "$1"\n}\n',
+    )
+
+    out = _analyzer(root, BashPlugin({})).collect_evidence(
+        _request(root, "scripts/app.sh", 5)
+    )
+
+    assert out.supported is True
+    assert any("handler calls 'sink'" in step for step in out.flow_chain)
+
+
+def test_lua_generic_analyzer_builds_call_graph(tmp_path):
+    root = tmp_path / "repo"
+    _write(
+        root,
+        "app.lua",
+        "function sink(value)\n  return value\nend\n"
+        "function handler(value)\n  return sink(value)\nend\n",
+    )
+
+    out = _analyzer(root, LuaPlugin({})).collect_evidence(_request(root, "app.lua", 5))
 
     assert out.supported is True
     assert any("handler calls 'sink'" in step for step in out.flow_chain)

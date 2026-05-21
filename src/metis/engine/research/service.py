@@ -75,7 +75,9 @@ class ResearchService:
         status = ResearchRunStatus(request=request)
         with self._job_lock:
             self._job_statuses[status.job_id] = status.model_copy(deep=True)
-        future = self._executor.submit(self._run_tracked_request, status.job_id, request)
+        future = self._executor.submit(
+            self._run_tracked_request, status.job_id, request
+        )
         with self._job_lock:
             self._job_futures[status.job_id] = future
         return status.model_copy(deep=True)
@@ -217,11 +219,17 @@ class ResearchService:
         hypotheses: list[Hypothesis] = []
         proof_artifact_paths: list[str] = []
         lesson_refs: set[str] = set()
-        selected_hunters = tuple(research_options.hunters)
+        requested_hunters = tuple(research_options.hunters)
+        selected_hunters, skipped_hunters = _effective_hunter_selection(
+            requested_hunters
+        )
         metric_summary: dict[str, Any] = {
             "available_hunters": self.hunters.available_names(),
             "selected_hunters": selected_hunters,
         }
+        if skipped_hunters:
+            metric_summary["requested_hunters"] = requested_hunters
+            metric_summary["skipped_hunters"] = skipped_hunters
         for hunter in self.hunters.select(selected_hunters):
             hunter_result = hunter.hunt(
                 root_path,
@@ -401,14 +409,10 @@ class ResearchService:
             "verified": {
                 "generated": len(hypotheses),
                 "proven": sum(
-                    1
-                    for item in hypotheses
-                    if item.status == HypothesisStatus.PROVEN
+                    1 for item in hypotheses if item.status == HypothesisStatus.PROVEN
                 ),
                 "killed": sum(
-                    1
-                    for item in hypotheses
-                    if item.status == HypothesisStatus.KILLED
+                    1 for item in hypotheses if item.status == HypothesisStatus.KILLED
                 ),
                 "unresolved": sum(
                     1
@@ -524,10 +528,25 @@ def _lesson_refs_from_result(result: ResearchRunResult) -> set[str]:
 
 def _lesson_refs_from_hypotheses(hypotheses: list[Hypothesis]) -> set[str]:
     return {
-        str(ref)
-        for hypothesis in hypotheses
-        for ref in hypothesis.lesson_refs
-        if ref
+        str(ref) for hypothesis in hypotheses for ref in hypothesis.lesson_refs if ref
+    }
+
+
+def _effective_hunter_selection(
+    requested_hunters: tuple[str, ...],
+) -> tuple[tuple[str, ...], dict[str, str]]:
+    specific_rce = {
+        "command_injection",
+        "code_injection",
+        "template_injection",
+    }
+    if "injection_path" not in requested_hunters:
+        return requested_hunters, {}
+    if not specific_rce.intersection(requested_hunters):
+        return requested_hunters, {}
+    selected = tuple(name for name in requested_hunters if name != "injection_path")
+    return selected, {
+        "injection_path": "skipped because class-specific RCE hunters were selected",
     }
 
 

@@ -6,7 +6,17 @@ from metis.plugins.base import ConfigBackedLanguagePlugin
 
 class CppPlugin(ConfigBackedLanguagePlugin):
     NAME = "cpp"
-    DEFAULT_EXTENSIONS = [".cpp", ".hpp"]
+    DEFAULT_EXTENSIONS = [
+        ".cc",
+        ".cpp",
+        ".cxx",
+        ".c++",
+        ".hpp",
+        ".hh",
+        ".hxx",
+        ".hhp",
+        ".ipp",
+    ]
     DEFAULT_TEST_PATH_PATTERNS = ["**/testcases/**"]
 
     def get_function_node_types(self) -> dict[str, list[str]]:
